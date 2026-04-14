@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { getSbUrl, getSbKey, getSyncMode } from "$lib/stores/settings.svelte";
 	import { isCloudActive, sbHeaders } from "$lib/supabase";
 	import type { LogEntry } from "$lib/types";
@@ -7,7 +8,7 @@
 	let loading = $state(false);
 	let errorMsg = $state("");
 
-	export async function loadLogs(): Promise<void> {
+	async function loadLogs(): Promise<void> {
 		if (!isCloudActive(getSyncMode(), getSbUrl(), getSbKey())) {
 			logs = [];
 			errorMsg = "Synchronizace není aktivní.";
@@ -42,6 +43,10 @@
 			second: "2-digit",
 		});
 	}
+
+	onMount(() => {
+		loadLogs();
+	});
 </script>
 
 <div class="log-wrap">

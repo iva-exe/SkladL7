@@ -16,7 +16,6 @@
 	let importOpen = $state(false);
 	let settingsOpen = $state(false);
 	let toastRef: ReturnType<typeof Toast> | undefined = $state();
-	let logRef: ReturnType<typeof LogView> | undefined = $state();
 
 	const syncStatus = $derived(getSyncStatus());
 	const checked = $derived(getChecked());
@@ -46,7 +45,6 @@
 
 	function switchTab(tab: "seznam" | "log"): void {
 		activeTab = tab;
-		if (tab === "log") logRef?.loadLogs();
 	}
 
 	onMount(() => {
@@ -120,7 +118,7 @@
 	<Toolbar />
 	<VehicleTable />
 {:else}
-	<LogView bind:this={logRef} />
+	<LogView />
 {/if}
 
 <ImportModal bind:open={importOpen} onclose={() => { importOpen = false; }} ontoast={showToast} />
