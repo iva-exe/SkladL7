@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Vehicle } from "$lib/types";
 	import { calcDays, yesterdayStr, fromIsoDate } from "$lib/utils/dates";
-	import { toggleChecked, getChecked, getLastImportChangedVins, setVehicleMeta, saveData, pushLog, addImportChanged } from "$lib/stores/vehicles.svelte";
+	import { getLastImportChangedVins, setVehicleMeta, saveData, pushLog, addImportChanged } from "$lib/stores/vehicles.svelte";
 	import { getUserName } from "$lib/stores/settings.svelte";
 	import Dropdown from "./Dropdown.svelte";
 
@@ -115,8 +115,7 @@
 </script>
 
 <tr class:checked-row={checked} class="has-tooltip" data-vin={vehicle.vin}>
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<td class="cb-cell" onmousedown={(e) => { e.preventDefault(); toggleChecked(vehicle.vin); }}>
+	<td class="cb-cell">
 		<input type="checkbox" checked={checked} data-vin={vehicle.vin} />
 	</td>
 	<td class="vin">
