@@ -2,7 +2,7 @@ import { browser } from "$app/environment";
 import type { Vehicle, VehicleRow } from "$lib/types";
 import { toLocal, toRow } from "$lib/types";
 import { isCloudActive, sbHeaders, getClient, resetClient, getChannel, setChannel } from "$lib/supabase";
-import { getSyncMode, getSbUrl, getSbKey, getUserName } from "$lib/stores/settings.svelte";
+import { getSyncMode, getSbUrl, getSbKey, getUserName, getWorkspaceName } from "$lib/stores/settings.svelte";
 import { nowStr } from "$lib/utils/dates";
 
 const STORAGE_KEY = "sklad_vozidel_data";
@@ -44,6 +44,11 @@ export function addImportChanged(vin: string): void {
 	const next = new Set(_lastImportChangedVins);
 	next.add(vin);
 	_lastImportChangedVins = next;
+}
+
+function syncLabel(label: string): string {
+	const ws = getWorkspaceName();
+	return ws ? `${label} — ${ws}` : label;
 }
 
 function setSyncState(state: string, label: string): void {
@@ -99,7 +104,7 @@ export async function pushToCloud(): Promise<void> {
 			body: JSON.stringify(rows),
 		});
 		if (!res.ok) throw new Error("HTTP " + res.status);
-		setSyncState("ok", "Synchronizováno");
+		setSyncState("ok", syncLabel("Synchronizováno"));
 	} catch (err) {
 		console.warn("Push failed:", err);
 		setSyncState("error", "Chyba sync");
@@ -122,7 +127,7 @@ export async function pullFromCloud(): Promise<void> {
 			_vehicles = Object.values(merged);
 			saveLocal();
 		}
-		setSyncState("ok", "Synchronizováno");
+		setSyncState("ok", syncLabel("Synchronizováno"));
 	} catch (err) {
 		console.warn("Pull failed:", err);
 		setSyncState("error", "Chyba sync");
@@ -188,11 +193,11 @@ export function startSync(): void {
 					_vehicles = _vehicles.filter((v) => v.vin !== payload.old.vin);
 				}
 				saveLocal();
-				setSyncState("ok", "Synchronizováno");
+				setSyncState("ok", syncLabel("Synchronizováno"));
 			},
 		)
 		.subscribe((s: string) => {
-			if (s === "SUBSCRIBED") setSyncState("ok", "Synchronizováno");
+			if (s === "SUBSCRIBED") setSyncState("ok", syncLabel("Synchronizováno"));
 			else if (s === "CHANNEL_ERROR") setSyncState("error", "Chyba spojení");
 		});
 

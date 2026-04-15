@@ -23,15 +23,13 @@ function loadSettings(): AppSettings {
 	}
 }
 
-// Reactive state using Svelte 5 runes via module-level $state
-// These are exported as getter/setter functions since module-level $state
-// can't be directly exported
-
 let _settings = $state<AppSettings>(loadSettings());
 let _syncMode = $state<string>(browser ? localStorage.getItem("sync_mode") || "local" : "local");
 let _userName = $state<string>(browser ? localStorage.getItem("sb_user") || "" : "");
 let _sbUrl = $state<string>(browser ? localStorage.getItem("sb_url") || "" : "");
 let _sbKey = $state<string>(browser ? localStorage.getItem("sb_key") || "" : "");
+let _workspaceCode = $state<string>(browser ? localStorage.getItem("workspace_code") || "" : "");
+let _workspaceName = $state<string>(browser ? localStorage.getItem("workspace_name") || "" : "");
 
 export function getSettings(): AppSettings { return _settings; }
 export function setSettings(s: AppSettings): void {
@@ -65,4 +63,32 @@ export function getSbKey(): string { return _sbKey; }
 export function setSbKey(key: string): void {
 	_sbKey = key;
 	if (browser) localStorage.setItem("sb_key", key);
+}
+
+export function getWorkspaceCode(): string { return _workspaceCode; }
+export function setWorkspaceCode(code: string): void {
+	_workspaceCode = code;
+	if (browser) localStorage.setItem("workspace_code", code);
+}
+
+export function getWorkspaceName(): string { return _workspaceName; }
+export function setWorkspaceName(name: string): void {
+	_workspaceName = name;
+	if (browser) localStorage.setItem("workspace_name", name);
+}
+
+/** Clear all connection data (disconnect) */
+export function clearConnection(): void {
+	_sbUrl = "";
+	_sbKey = "";
+	_workspaceCode = "";
+	_workspaceName = "";
+	_syncMode = "local";
+	if (browser) {
+		localStorage.removeItem("sb_url");
+		localStorage.removeItem("sb_key");
+		localStorage.removeItem("workspace_code");
+		localStorage.removeItem("workspace_name");
+		localStorage.setItem("sync_mode", "local");
+	}
 }

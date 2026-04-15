@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData } from "$lib/stores/vehicles.svelte";
-	import { getUserName } from "$lib/stores/settings.svelte";
+	import { getUserName, getWorkspaceName } from "$lib/stores/settings.svelte";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
