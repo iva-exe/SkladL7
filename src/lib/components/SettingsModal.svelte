@@ -2,7 +2,7 @@
 	import {
 		getUserName, setUserName,
 		getSyncMode, setSyncMode as storeSyncMode,
-		setSbUrl, setSbKey,
+		getSbUrl, setSbUrl, getSbKey, setSbKey,
 		getWorkspaceCode, setWorkspaceCode, setWorkspaceName,
 		clearConnection,
 	} from "$lib/stores/settings.svelte";
@@ -53,30 +53,29 @@
 				return;
 			}
 
-			// If code changed, verify it via API
-			if (cleanCode !== getWorkspaceCode()) {
-				connecting = true;
-				codeError = "";
-				try {
-					const res = await fetch(`/api/connect/${encodeURIComponent(cleanCode)}`);
-					if (!res.ok) {
-						const err = await res.json().catch(() => ({ message: "Chyba připojení." }));
-						codeError = err.message || `Chyba: ${res.status}`;
-						connecting = false;
-						return;
-					}
-					const data = await res.json();
-					setSbUrl(data.url);
-					setSbKey(data.key);
-					setWorkspaceCode(data.code);
-					setWorkspaceName(data.name);
-				} catch {
-					codeError = "Nepodařilo se připojit k serveru.";
+			// Always verify the code via API (even if same — ensures credentials are fresh)
+			connecting = true;
+			codeError = "";
+			try {
+				const res = await fetch(`/api/connect/${encodeURIComponent(cleanCode)}`);
+				const data = await res.json();
+
+				if (!res.ok) {
+					codeError = data.error || `Chyba: ${res.status}`;
 					connecting = false;
 					return;
 				}
+
+				setSbUrl(data.url);
+				setSbKey(data.key);
+				setWorkspaceCode(data.code);
+				setWorkspaceName(data.name);
+			} catch {
+				codeError = "Nepodařilo se připojit k serveru.";
 				connecting = false;
+				return;
 			}
+			connecting = false;
 
 			storeSyncMode("supabase");
 			open = false;
@@ -140,7 +139,7 @@
 							{codeError}
 						</div>
 					{/if}
-					{#if getWorkspaceCode()}
+					{#if getWorkspaceCode() && getSbUrl()}
 						<div class="connected-info">
 							<span class="connected-dot"></span>
 							Připojeno: <strong>{getWorkspaceCode()}</strong>

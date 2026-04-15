@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData } from "$lib/stores/vehicles.svelte";
-	import { getUserName, getWorkspaceName } from "$lib/stores/settings.svelte";
+	import { getUserName, getWorkspaceName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceCode, setWorkspaceName, clearConnection, setSyncMode } from "$lib/stores/settings.svelte";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
@@ -47,11 +47,42 @@
 		activeTab = tab;
 	}
 
+	/** Re-validate workspace code on startup — refresh credentials from server */
+	async function validateWorkspace(): Promise<void> {
+		const code = getWorkspaceCode();
+		if (!code || getSyncMode() !== "supabase") return;
+
+		try {
+			const res = await fetch(`/api/connect/${encodeURIComponent(code)}`);
+			const data = await res.json();
+
+			if (!res.ok) {
+				console.warn("Workspace validation failed:", data.error);
+				clearConnection();
+				showToast("Workspace kód je neplatný. Přepnuto na lokální režim.");
+				startSync();
+				return;
+			}
+
+			// Refresh credentials (key may have rotated)
+			setSbUrl(data.url);
+			setSbKey(data.key);
+			setWorkspaceName(data.name);
+			console.log(`Workspace ověřen: ${data.name} (${data.code})`);
+			startSync();
+		} catch {
+			// Network error — use cached credentials
+			console.warn("Workspace validation offline, using cached credentials");
+			startSync();
+		}
+	}
+
 	onMount(() => {
 		console.log(`%cSklad vozidel L7ATG v${CURRENT_VERSION}`, "font-weight:bold;color:#a21a19");
 		console.log(`Režim: ${import.meta.env.SSR ? "—" : "client"} | Uživatel: ${getUserName() || "—"}`);
 
-		startSync();
+		// Validate workspace and start sync
+		validateWorkspace();
 
 		// Auto-open settings if no user name
 		if (!getUserName()) {
