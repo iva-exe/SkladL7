@@ -14,36 +14,46 @@ export const GET: RequestHandler = async ({ params }) => {
 	const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
 
 	if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !SUPABASE_ANON_KEY) {
-		console.error("Missing env vars:", {
+		console.error("Connect: Missing env vars:", {
 			hasUrl: !!SUPABASE_URL,
 			hasServiceKey: !!SUPABASE_SERVICE_KEY,
 			hasAnonKey: !!SUPABASE_ANON_KEY,
 		});
-		return json({ error: "Server nemá nakonfigurované připojení." }, { status: 500 });
+		return json({ error: "Server nemá nakonfigurované připojení k databázi." }, { status: 500 });
 	}
 
 	try {
 		// Use service key for server-side lookup (bypasses RLS)
 		const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-		const { data, error: dbError } = await supabase
+		console.log(`Connect: Looking up workspace code="${code}"`);
+
+		const { data, error: dbError, status, statusText } = await supabase
 			.from("workspaces")
 			.select("code, name, active")
 			.eq("code", code)
 			.single();
 
+		console.log(`Connect: Query result — status=${status}, error=${dbError?.message || "none"}, data=${JSON.stringify(data)}`);
+
 		if (dbError) {
-			console.error("Workspace lookup error:", dbError.message, dbError.code);
-			return json({ error: "Neplatný kód workspace." }, { status: 404 });
+			// PGRST116 = "JSON object requested, multiple (or no) rows returned" — means 0 rows
+			if (dbError.code === "PGRST116") {
+				return json({ error: `Kód "${code}" nebyl nalezen.` }, { status: 404 });
+			}
+			console.error("Connect: DB error:", dbError.message, dbError.code, dbError.details, dbError.hint);
+			return json({ error: `Chyba databáze: ${dbError.message}` }, { status: 500 });
 		}
 
 		if (!data) {
-			return json({ error: "Neplatný kód workspace." }, { status: 404 });
+			return json({ error: `Kód "${code}" nebyl nalezen.` }, { status: 404 });
 		}
 
 		if (!data.active) {
 			return json({ error: "Tento workspace byl deaktivován." }, { status: 403 });
 		}
+
+		console.log(`Connect: Success — workspace="${data.name}" code="${data.code}"`);
 
 		// Return publishable (anon) key — safe for client-side use
 		return json({
@@ -53,7 +63,7 @@ export const GET: RequestHandler = async ({ params }) => {
 			code: data.code,
 		});
 	} catch (err) {
-		console.error("Connect API error:", err);
+		console.error("Connect: Unexpected error:", err);
 		return json({ error: "Chyba serveru při ověřování kódu." }, { status: 500 });
 	}
 };

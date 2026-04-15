@@ -50,14 +50,27 @@
 	/** Re-validate workspace code on startup — refresh credentials from server */
 	async function validateWorkspace(): Promise<void> {
 		const code = getWorkspaceCode();
-		if (!code || getSyncMode() !== "supabase") return;
+		if (!code || getSyncMode() !== "supabase") {
+			console.log("Startup: No workspace code or local mode, skipping validation");
+			startSync();
+			return;
+		}
+
+		console.log(`Startup: Validating workspace code="${code}"`);
 
 		try {
 			const res = await fetch(`/api/connect/${encodeURIComponent(code)}`);
-			const data = await res.json();
+			let data: Record<string, unknown>;
+			try {
+				data = await res.json();
+			} catch {
+				console.warn("Startup: Server returned non-JSON response, using cached credentials");
+				startSync();
+				return;
+			}
 
 			if (!res.ok) {
-				console.warn("Workspace validation failed:", data.error);
+				console.warn(`Startup: Workspace validation failed (HTTP ${res.status}):`, data.error);
 				clearConnection();
 				showToast("Workspace kód je neplatný. Přepnuto na lokální režim.");
 				startSync();
@@ -65,14 +78,14 @@
 			}
 
 			// Refresh credentials (key may have rotated)
-			setSbUrl(data.url);
-			setSbKey(data.key);
-			setWorkspaceName(data.name);
-			console.log(`Workspace ověřen: ${data.name} (${data.code})`);
+			setSbUrl(data.url as string);
+			setSbKey(data.key as string);
+			setWorkspaceName(data.name as string);
+			console.log(`Startup: Workspace ověřen — "${data.name}" (${data.code})`);
 			startSync();
-		} catch {
+		} catch (err) {
 			// Network error — use cached credentials
-			console.warn("Workspace validation offline, using cached credentials");
+			console.warn("Startup: Validation offline, using cached credentials:", err);
 			startSync();
 		}
 	}

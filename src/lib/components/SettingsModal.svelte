@@ -58,20 +58,33 @@
 			codeError = "";
 			try {
 				const res = await fetch(`/api/connect/${encodeURIComponent(cleanCode)}`);
-				const data = await res.json();
-
-				if (!res.ok) {
-					codeError = data.error || `Chyba: ${res.status}`;
+				let data: Record<string, unknown>;
+				try {
+					data = await res.json();
+				} catch {
+					codeError = `Server vrátil neplatnou odpověď (HTTP ${res.status}).`;
 					connecting = false;
 					return;
 				}
 
-				setSbUrl(data.url);
-				setSbKey(data.key);
-				setWorkspaceCode(data.code);
-				setWorkspaceName(data.name);
-			} catch {
-				codeError = "Nepodařilo se připojit k serveru.";
+				if (!res.ok) {
+					codeError = (data.error as string) || `Chyba serveru (HTTP ${res.status}).`;
+					connecting = false;
+					return;
+				}
+
+				if (!data.url || !data.key) {
+					codeError = "Server vrátil neúplná data.";
+					connecting = false;
+					return;
+				}
+
+				setSbUrl(data.url as string);
+				setSbKey(data.key as string);
+				setWorkspaceCode(data.code as string);
+				setWorkspaceName(data.name as string);
+			} catch (err) {
+				codeError = `Nepodařilo se připojit k serveru: ${err instanceof Error ? err.message : "neznámá chyba"}.`;
 				connecting = false;
 				return;
 			}
