@@ -10,7 +10,7 @@
 	import LogView from "$lib/components/LogView.svelte";
 	import Toast from "$lib/components/Toast.svelte";
 
-	const CURRENT_VERSION = "1";
+	const CURRENT_VERSION = __BUILD_ID__;
 
 	let activeTab = $state<"seznam" | "log">("seznam");
 	let importOpen = $state(false);
