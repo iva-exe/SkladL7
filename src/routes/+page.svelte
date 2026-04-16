@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
-	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData } from "$lib/stores/vehicles.svelte";
-	import { getUserName, getWorkspaceName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceCode, setWorkspaceName, clearConnection, setSyncMode } from "$lib/stores/settings.svelte";
+	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData, setOnAuthExpired } from "$lib/stores/vehicles.svelte";
+	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection } from "$lib/stores/settings.svelte";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
@@ -84,8 +84,10 @@
 			console.log(`Startup: Workspace ověřen — "${data.name}" (${data.code})`);
 			startSync();
 		} catch (err) {
-			// Network error — use cached credentials
-			console.warn("Startup: Validation offline, using cached credentials:", err);
+			// Network error — can't get credentials, stay in local mode
+			console.warn("Startup: Validation failed (offline), switching to local mode:", err);
+			clearConnection();
+			showToast("Nelze ověřit připojení (offline). Přepnuto na lokální režim.");
 			startSync();
 		}
 	}
@@ -93,6 +95,12 @@
 	onMount(() => {
 		console.log(`%cSklad vozidel L7ATG v${CURRENT_VERSION}`, "font-weight:bold;color:#a21a19");
 		console.log(`Režim: ${import.meta.env.SSR ? "—" : "client"} | Uživatel: ${getUserName() || "—"}`);
+
+		// Register auth expired handler — opens settings with warning when key is revoked
+		setOnAuthExpired(() => {
+			settingsOpen = true;
+			showToast("Přístupový kód byl změněn. Přepnuto na lokální režim.");
+		});
 
 		// Validate workspace and start sync
 		validateWorkspace();

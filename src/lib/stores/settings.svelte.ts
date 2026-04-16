@@ -26,8 +26,10 @@ function loadSettings(): AppSettings {
 let _settings = $state<AppSettings>(loadSettings());
 let _syncMode = $state<string>(browser ? localStorage.getItem("sync_mode") || "local" : "local");
 let _userName = $state<string>(browser ? localStorage.getItem("sb_user") || "" : "");
-let _sbUrl = $state<string>(browser ? localStorage.getItem("sb_url") || "" : "");
-let _sbKey = $state<string>(browser ? localStorage.getItem("sb_key") || "" : "");
+// Credentials stay in memory only — fetched fresh from server on each session
+let _sbUrl = $state<string>("");
+let _sbKey = $state<string>("");
+let _authExpired = $state(false);
 let _workspaceCode = $state<string>(browser ? localStorage.getItem("workspace_code") || "" : "");
 let _workspaceName = $state<string>(browser ? localStorage.getItem("workspace_name") || "" : "");
 
@@ -54,16 +56,13 @@ export function setUserName(name: string): void {
 }
 
 export function getSbUrl(): string { return _sbUrl; }
-export function setSbUrl(url: string): void {
-	_sbUrl = url;
-	if (browser) localStorage.setItem("sb_url", url);
-}
+export function setSbUrl(url: string): void { _sbUrl = url; }
 
 export function getSbKey(): string { return _sbKey; }
-export function setSbKey(key: string): void {
-	_sbKey = key;
-	if (browser) localStorage.setItem("sb_key", key);
-}
+export function setSbKey(key: string): void { _sbKey = key; }
+
+export function getAuthExpired(): boolean { return _authExpired; }
+export function setAuthExpired(v: boolean): void { _authExpired = v; }
 
 export function getWorkspaceCode(): string { return _workspaceCode; }
 export function setWorkspaceCode(code: string): void {
@@ -85,10 +84,11 @@ export function clearConnection(): void {
 	_workspaceName = "";
 	_syncMode = "local";
 	if (browser) {
-		localStorage.removeItem("sb_url");
-		localStorage.removeItem("sb_key");
 		localStorage.removeItem("workspace_code");
 		localStorage.removeItem("workspace_name");
 		localStorage.setItem("sync_mode", "local");
+		// Clean up any leftover keys from older versions
+		localStorage.removeItem("sb_url");
+		localStorage.removeItem("sb_key");
 	}
 }

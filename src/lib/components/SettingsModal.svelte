@@ -4,10 +4,9 @@
 		getSyncMode, setSyncMode as storeSyncMode,
 		getSbUrl, setSbUrl, getSbKey, setSbKey,
 		getWorkspaceCode, setWorkspaceCode, setWorkspaceName,
-		clearConnection,
+		clearConnection, getAuthExpired, setAuthExpired,
 	} from "$lib/stores/settings.svelte";
 	import { pushToCloud, startSync } from "$lib/stores/vehicles.svelte";
-	import { isCloudActive } from "$lib/supabase";
 
 	interface Props {
 		open: boolean;
@@ -23,6 +22,8 @@
 	let connecting = $state(false);
 	let codeError = $state("");
 
+	const authExpired = $derived(getAuthExpired());
+
 	// Reset form values when modal opens
 	$effect(() => {
 		if (open) {
@@ -37,6 +38,8 @@
 	function setMode(mode: string): void {
 		tempMode = mode;
 		codeError = "";
+		// Clear expired flag when user actively switches mode
+		if (authExpired) setAuthExpired(false);
 	}
 
 	async function save(): Promise<void> {
@@ -53,7 +56,7 @@
 				return;
 			}
 
-			// Always verify the code via API (even if same — ensures credentials are fresh)
+			// Always verify the code via API
 			connecting = true;
 			codeError = "";
 			try {
@@ -79,6 +82,7 @@
 					return;
 				}
 
+				// Store credentials in memory only (not localStorage)
 				setSbUrl(data.url as string);
 				setSbKey(data.key as string);
 				setWorkspaceCode(data.code as string);
@@ -90,16 +94,21 @@
 			}
 			connecting = false;
 
+			// Clear expired flag on successful reconnect
+			if (authExpired) setAuthExpired(false);
+
 			storeSyncMode("supabase");
 			open = false;
-			pushToCloud().then(() => startSync());
+			// Online mode: load data from cloud (not from local storage)
+			startSync();
 		} else {
-			// Switch to local mode
+			// Switch to local mode — clear cloud credentials
 			if (getSyncMode() === "supabase") {
 				clearConnection();
 			}
 			storeSyncMode("local");
 			open = false;
+			// Local mode: load data from localStorage
 			startSync();
 		}
 	}
@@ -108,6 +117,7 @@
 		clearConnection();
 		code = "";
 		tempMode = "local";
+		if (authExpired) setAuthExpired(false);
 		startSync();
 		ontoast("Odpojeno od workspace.");
 	}
@@ -147,12 +157,17 @@
 						placeholder="např. IMPORTO2026"
 						style="text-transform: uppercase; letter-spacing: 0.05em"
 					/>
+					{#if authExpired}
+						<div class="auth-expired-warning">
+							Přístupový kód byl změněn nebo zrušen. Zadej nový platný kód.
+						</div>
+					{/if}
 					{#if codeError}
 						<div style="font-size: 12px; color: var(--accent); margin-top: -8px; margin-bottom: 12px">
 							{codeError}
 						</div>
 					{/if}
-					{#if getWorkspaceCode() && getSbUrl()}
+					{#if getWorkspaceCode() && getSbUrl() && !authExpired}
 						<div class="connected-info">
 							<span class="connected-dot"></span>
 							Připojeno: <strong>{getWorkspaceCode()}</strong>
@@ -196,5 +211,15 @@
 		border-radius: 50%;
 		background: var(--green);
 		flex-shrink: 0;
+	}
+	.auth-expired-warning {
+		font-size: 12px;
+		color: #e67e22;
+		background: rgba(230, 126, 34, 0.08);
+		border: 1px solid rgba(230, 126, 34, 0.25);
+		border-radius: var(--radius);
+		padding: 8px 12px;
+		margin-top: -8px;
+		margin-bottom: 12px;
 	}
 </style>
