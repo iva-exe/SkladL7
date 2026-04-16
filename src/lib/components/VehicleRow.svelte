@@ -46,6 +46,9 @@
 	function onSkladChange(val: string): void {
 		const prev = vehicle.sklad;
 		vehicle.sklad = val;
+		// Manual sklad change clears the code
+		vehicle.code = "";
+		codeValue = "";
 		setVehicleMeta(vehicle);
 		addImportChanged(vehicle.vin);
 		saveData();
@@ -99,6 +102,15 @@
 		const prev = vehicle.code || "";
 		if (val !== prev) {
 			vehicle.code = val;
+			// Revalidate sklad based on first character of new code
+			if (val) {
+				const newSklad = val.startsWith("D") ? "Klíčany" : "Měšice";
+				if (vehicle.sklad !== newSklad) {
+					const prevSklad = vehicle.sklad;
+					vehicle.sklad = newSklad;
+					pushLog("Změna skladu", vehicle.vin, `${prevSklad} → ${newSklad} (auto z kódu)`);
+				}
+			}
 			setVehicleMeta(vehicle);
 			addImportChanged(vehicle.vin);
 			saveData();
@@ -134,11 +146,12 @@
 				bind:value={codeValue}
 				onblur={finishEditCode}
 				onkeydown={handleCodeKeydown}
+				placeholder="Zadejte kód"
 			/>
 		{:else}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<span class="editable-code" onclick={startEditCode} onkeydown={(e) => { if (e.key === 'Enter') startEditCode(); }} role="button" tabindex="0">
-				{vehicle.code || ""}
+			<span class="editable-code" class:code-placeholder={!vehicle.code} onclick={startEditCode} onkeydown={(e) => { if (e.key === 'Enter') startEditCode(); }} role="button" tabindex="0">
+				{vehicle.code || "Zadejte kód"}
 			</span>
 		{/if}
 	</td>
@@ -195,14 +208,24 @@
 		color: var(--text-secondary);
 		cursor: pointer;
 	}
+	.editable-code.code-placeholder {
+		color: var(--text-secondary);
+		opacity: 0.5;
+		font-style: italic;
+	}
 	.code-input {
-		width: 50px;
+		width: 80px;
 		font-family: "DM Mono", monospace;
 		font-size: 11px;
 		padding: 1px 4px;
 		border: 1px solid var(--accent);
 		border-radius: 3px;
 		outline: none;
+	}
+	.code-input::placeholder {
+		color: var(--text-secondary);
+		opacity: 0.5;
+		font-style: italic;
 	}
 	.date-added {
 		font-family: "DM Mono", monospace;

@@ -16,6 +16,14 @@ export function yesterdayStr(): string {
 	return formatDate(d);
 }
 
+/** Last working day: Monday → Friday (−3), otherwise yesterday (−1) */
+export function lastWorkdayStr(): string {
+	const d = new Date();
+	const day = d.getDay(); // 0=Sun, 1=Mon, …
+	d.setDate(d.getDate() - (day === 1 ? 3 : 1));
+	return formatDate(d);
+}
+
 export function nowStr(): string {
 	const d = new Date();
 	return `${formatDate(d)}, ${pad(d.getHours())}:${pad(d.getMinutes())}`;

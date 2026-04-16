@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { parseLines } from "$lib/utils/parser";
-	import { todayStr, yesterdayStr } from "$lib/utils/dates";
+	import { todayStr, lastWorkdayStr } from "$lib/utils/dates";
 	import { getVehicles, setVehicles, setVehicleMeta, saveData, pushLog, addImportChanged } from "$lib/stores/vehicles.svelte";
 	import type { Vehicle } from "$lib/types";
 
@@ -25,7 +25,7 @@
 		const inVins = new Set(incoming.map((v) => v.vin));
 		const map: Record<string, Vehicle> = {};
 		vehicles.forEach((v) => { map[v.vin] = v; });
-		const yesterday = yesterdayStr();
+		const lastWorkday = lastWorkdayStr();
 		let added = 0, restocked = 0, removed = 0;
 
 		for (const v of incoming) {
@@ -77,7 +77,7 @@
 		for (const v of vehicles) {
 			if (v.status === "naskladneno" && !inVins.has(v.vin)) {
 				v.status = "vyskladneno";
-				v.dateOut = yesterday;
+				v.dateOut = lastWorkday;
 				setVehicleMeta(v);
 				addImportChanged(v.vin);
 				removed++;
