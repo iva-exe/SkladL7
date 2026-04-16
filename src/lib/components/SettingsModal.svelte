@@ -4,7 +4,8 @@
 		getSyncMode, setSyncMode as storeSyncMode,
 		getSbUrl, setSbUrl, getSbKey, setSbKey,
 		getWorkspaceCode, setWorkspaceCode, setWorkspaceName,
-		clearConnection, getAuthExpired, setAuthExpired,
+		clearConnection, suspendCloud,
+		getAuthExpired, setAuthExpired,
 	} from "$lib/stores/settings.svelte";
 	import { pushToCloud, startSync } from "$lib/stores/vehicles.svelte";
 
@@ -102,11 +103,8 @@
 			// Online mode: load data from cloud (not from local storage)
 			startSync();
 		} else {
-			// Switch to local mode — clear cloud credentials
-			if (getSyncMode() === "supabase") {
-				clearConnection();
-			}
-			storeSyncMode("local");
+			// Switch to local mode — keep workspace code, just suspend cloud
+			suspendCloud();
 			open = false;
 			// Local mode: load data from localStorage
 			startSync();
@@ -167,13 +165,17 @@
 							{codeError}
 						</div>
 					{/if}
-					{#if getWorkspaceCode() && getSbUrl() && !authExpired}
+					{#if getWorkspaceCode() && getSyncMode() === "supabase" && getSbUrl() && !authExpired}
 						<div class="connected-info">
 							<span class="connected-dot"></span>
 							Připojeno: <strong>{getWorkspaceCode()}</strong>
 							<button class="btn btn-small" style="margin-left: auto; color: var(--accent)" onclick={disconnect}>
 								Odpojit
 							</button>
+						</div>
+					{:else if getWorkspaceCode() && !authExpired}
+						<div class="saved-code-info">
+							Uložený kód: <strong>{getWorkspaceCode()}</strong>
 						</div>
 					{/if}
 				{:else}
@@ -211,6 +213,18 @@
 		border-radius: 50%;
 		background: var(--green);
 		flex-shrink: 0;
+	}
+	.saved-code-info {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 12px;
+		color: var(--text-secondary);
+		padding: 8px 12px;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		margin-top: 4px;
 	}
 	.auth-expired-warning {
 		font-size: 12px;

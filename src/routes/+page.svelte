@@ -2,7 +2,7 @@
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData, setOnAuthExpired } from "$lib/stores/vehicles.svelte";
-	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection } from "$lib/stores/settings.svelte";
+	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection, setAuthExpired } from "$lib/stores/settings.svelte";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
@@ -50,12 +50,23 @@
 	/** Re-validate workspace code on startup — refresh credentials from server */
 	async function validateWorkspace(): Promise<void> {
 		const code = getWorkspaceCode();
-		if (!code || getSyncMode() !== "supabase") {
-			console.log("Startup: No workspace code or local mode, skipping validation");
+		const mode = getSyncMode();
+
+		// No code at all — just start in whatever mode we're in
+		if (!code) {
+			console.log("Startup: No workspace code, starting in current mode");
 			startSync();
 			return;
 		}
 
+		// Code exists but we're in local mode — don't validate, just start local
+		if (mode !== "supabase") {
+			console.log(`Startup: Code "${code}" saved but in local mode, skipping validation`);
+			startSync();
+			return;
+		}
+
+		// Code exists and we're in supabase mode — validate and get fresh credentials
 		console.log(`Startup: Validating workspace code="${code}"`);
 
 		try {
@@ -64,7 +75,7 @@
 			try {
 				data = await res.json();
 			} catch {
-				console.warn("Startup: Server returned non-JSON response, using cached credentials");
+				console.warn("Startup: Server returned non-JSON response, falling back to local");
 				startSync();
 				return;
 			}
@@ -72,22 +83,23 @@
 			if (!res.ok) {
 				console.warn(`Startup: Workspace validation failed (HTTP ${res.status}):`, data.error);
 				clearConnection();
+				setAuthExpired(true);
+				settingsOpen = true;
 				showToast("Workspace kód je neplatný. Přepnuto na lokální režim.");
 				startSync();
 				return;
 			}
 
-			// Refresh credentials (key may have rotated)
+			// Refresh credentials in memory (key may have rotated)
 			setSbUrl(data.url as string);
 			setSbKey(data.key as string);
 			setWorkspaceName(data.name as string);
 			console.log(`Startup: Workspace ověřen — "${data.name}" (${data.code})`);
 			startSync();
 		} catch (err) {
-			// Network error — can't get credentials, stay in local mode
-			console.warn("Startup: Validation failed (offline), switching to local mode:", err);
-			clearConnection();
-			showToast("Nelze ověřit připojení (offline). Přepnuto na lokální režim.");
+			// Network error — can't get credentials, start in local temporarily
+			console.warn("Startup: Validation failed (offline):", err);
+			showToast("Nelze ověřit připojení (offline). Dočasně lokální režim.");
 			startSync();
 		}
 	}

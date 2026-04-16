@@ -33,6 +33,9 @@ let _checked = $state<Set<string>>(new Set());
 let _lastImportChangedVins = $state<Set<string>>(new Set());
 let _syncState = $state<{ state: string; label: string }>({ state: "offline", label: "Offline" });
 let _onAuthExpired: (() => void) | null = null;
+let _authCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+const AUTH_CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
 // ── Getters ──
 
@@ -116,6 +119,9 @@ async function validateWorkspaceCode(): Promise<boolean> {
 function triggerAuthExpired(): void {
 	console.warn("Auth expired — disconnecting from workspace");
 
+	// Stop periodic auth checks
+	stopAuthCheck();
+
 	// Stop realtime channel
 	const ch = getChannel();
 	if (ch) {
@@ -149,6 +155,32 @@ async function handleCloudError(context: string, status: number): Promise<void> 
 		if (!valid) {
 			triggerAuthExpired();
 		}
+	}
+}
+
+// ── Periodic auth check ──
+
+function startAuthCheck(): void {
+	stopAuthCheck();
+	if (!cloudActive()) return;
+
+	_authCheckInterval = setInterval(async () => {
+		if (!cloudActive()) {
+			stopAuthCheck();
+			return;
+		}
+		console.log("Periodic auth check…");
+		const valid = await validateWorkspaceCode();
+		if (!valid) {
+			triggerAuthExpired();
+		}
+	}, AUTH_CHECK_INTERVAL_MS);
+}
+
+function stopAuthCheck(): void {
+	if (_authCheckInterval) {
+		clearInterval(_authCheckInterval);
+		_authCheckInterval = null;
 	}
 }
 
@@ -269,13 +301,14 @@ export function startSync(): void {
 	}
 
 	if (!cloudActive()) {
-		// Local mode — load from localStorage
+		// Local mode — stop auth checks, load from localStorage
+		stopAuthCheck();
 		_vehicles = loadLocal();
 		setSyncState("offline", getSyncMode() === "supabase" ? "Klikni ⚙" : "Lokální režim");
 		return;
 	}
 
-	// Online mode — fresh client, load from cloud
+	// Online mode — fresh client, load from cloud, start periodic auth check
 	resetClient();
 	const client = getClient(getSbUrl(), getSbKey());
 	pullFromCloud();
@@ -315,6 +348,9 @@ export function startSync(): void {
 		});
 
 	setChannel(newChannel);
+
+	// Start periodic auth validation
+	startAuthCheck();
 }
 
 export function handleVisibilityChange(): void {

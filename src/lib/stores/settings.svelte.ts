@@ -76,7 +76,15 @@ export function setWorkspaceName(name: string): void {
 	if (browser) localStorage.setItem("workspace_name", name);
 }
 
-/** Clear all connection data (disconnect) */
+/** Switch to local mode but keep workspace code in LS (for mode switching) */
+export function suspendCloud(): void {
+	_sbUrl = "";
+	_sbKey = "";
+	_syncMode = "local";
+	if (browser) localStorage.setItem("sync_mode", "local");
+}
+
+/** Clear all connection data — full disconnect (code removed from LS) */
 export function clearConnection(): void {
 	_sbUrl = "";
 	_sbKey = "";
