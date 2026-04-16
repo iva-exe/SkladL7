@@ -2,7 +2,8 @@
 	import { onMount } from "svelte";
 	import { browser } from "$app/environment";
 	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData, setOnAuthExpired } from "$lib/stores/vehicles.svelte";
-	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection, setAuthExpired } from "$lib/stores/settings.svelte";
+	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection, setAuthExpired, getSettings } from "$lib/stores/settings.svelte";
+	import { exportToExcel } from "$lib/utils/excel";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
@@ -19,6 +20,25 @@
 
 	const syncStatus = $derived(getSyncStatus());
 	const checked = $derived(getChecked());
+	const settings = $derived(getSettings());
+	const vehicles = $derived(getVehicles());
+
+	const isFiltered = $derived(
+		settings.filterStatus !== "all" ||
+		settings.filterModel !== "all" ||
+		settings.filterSklad !== "all" ||
+		!!settings.searchVin
+	);
+
+	const filteredVehicles = $derived.by(() => {
+		return vehicles.filter((v) => {
+			if (settings.filterStatus !== "all" && v.status !== settings.filterStatus) return false;
+			if (settings.filterModel !== "all" && v.model !== settings.filterModel) return false;
+			if (settings.filterSklad !== "all" && v.sklad !== settings.filterSklad) return false;
+			if (settings.searchVin && !v.vin.toUpperCase().includes(settings.searchVin.toUpperCase())) return false;
+			return true;
+		});
+	});
 
 	function showToast(msg: string): void {
 		toastRef?.show(msg);
@@ -41,6 +61,15 @@
 		clearChecked();
 		saveData();
 		showToast("Záznamy smazány.");
+	}
+
+	function downloadExcel(): void {
+		if (!filteredVehicles.length) {
+			showToast("Žádná vozidla k exportu.");
+			return;
+		}
+		exportToExcel(filteredVehicles);
+		showToast(`Export ${filteredVehicles.length} vozidel do Excelu.`);
 	}
 
 	function switchTab(tab: "seznam" | "log"): void {
@@ -168,6 +197,19 @@
 			</button>
 		</div>
 		<button class="btn" onclick={copyVin}>Kopírovat VIN</button>
+		<span class="excel-wrap">
+			<button class="btn" class:btn-filtered={isFiltered} onclick={downloadExcel}>
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+					<polyline points="14 2 14 8 20 8"/>
+					<path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/>
+				</svg>
+				Vytvořit Excel
+			</button>
+			{#if isFiltered}
+				<span class="filter-badge">Filtrováno</span>
+			{/if}
+		</span>
 		<button class="btn" style="color: var(--accent)" onclick={deleteSelected}>Smazat</button>
 		<button class="btn-primary btn" onclick={() => { importOpen = true; }}>Vložit seznam</button>
 	</div>
@@ -235,5 +277,31 @@
 	.tab-btn.active {
 		color: var(--accent);
 		border-bottom-color: var(--accent);
+	}
+	.excel-wrap {
+		position: relative;
+		display: inline-flex;
+	}
+	.btn-filtered {
+		background: #fef3e2 !important;
+		border-color: #f59e0b !important;
+		color: #b45309 !important;
+	}
+	.btn-filtered:hover {
+		background: #fde9c8 !important;
+	}
+	.filter-badge {
+		position: absolute;
+		top: -8px;
+		right: -6px;
+		font-size: 9px;
+		font-weight: 600;
+		color: #fff;
+		background: #f59e0b;
+		padding: 1px 6px;
+		border-radius: 100px;
+		pointer-events: none;
+		white-space: nowrap;
+		line-height: 1.4;
 	}
 </style>

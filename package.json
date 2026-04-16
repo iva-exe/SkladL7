@@ -22,6 +22,7 @@
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.103.0",
-		"@sveltejs/adapter-vercel": "^6.3.3"
+		"@sveltejs/adapter-vercel": "^6.3.3",
+		"xlsx": "^0.18.5"
 	}
 }
