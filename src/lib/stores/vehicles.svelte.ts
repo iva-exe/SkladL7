@@ -353,10 +353,18 @@ export function startSync(): void {
 	startAuthCheck();
 }
 
+/** One-off auth check (used on focus/visibility) */
+async function checkAuthOnce(): Promise<void> {
+	if (!cloudActive()) return;
+	const valid = await validateWorkspaceCode();
+	if (!valid) triggerAuthExpired();
+}
+
 export function handleVisibilityChange(): void {
 	if (typeof document === "undefined") return;
 	if (document.visibilityState === "visible" && cloudActive()) {
-		console.log("Tab aktivní — pull + kontrola channelu");
+		console.log("Tab aktivní — auth check + pull + kontrola channelu");
+		checkAuthOnce();
 		pullFromCloud();
 		const ch = getChannel();
 		if (!ch || (ch as any).state !== "joined") {
@@ -371,5 +379,7 @@ export function handleOnline(): void {
 }
 
 export function handleFocus(): void {
-	if (cloudActive()) pullFromCloud();
+	if (!cloudActive()) return;
+	checkAuthOnce();
+	pullFromCloud();
 }
