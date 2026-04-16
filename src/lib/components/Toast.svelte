@@ -7,7 +7,7 @@
 		message = msg;
 		visible = true;
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => { visible = false; }, 2500);
+		timer = setTimeout(() => { visible = false; }, 4000);
 	}
 </script>
 
@@ -16,19 +16,20 @@
 <style>
 	.toast {
 		position: fixed;
-		bottom: 24px;
-		right: 24px;
+		bottom: 28px;
+		right: 28px;
 		background: var(--text);
 		color: #fff;
-		padding: 10px 20px;
+		padding: 14px 28px;
 		border-radius: var(--radius);
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 500;
 		z-index: 200;
 		opacity: 0;
 		transform: translateY(8px);
-		transition: all 0.2s;
+		transition: all 0.25s;
 		pointer-events: none;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 	}
 	.toast.show {
 		opacity: 1;

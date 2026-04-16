@@ -7,7 +7,7 @@ import {
 	getWorkspaceCode, clearConnection, setAuthExpired,
 	setSbUrl, setSbKey, setWorkspaceName,
 } from "$lib/stores/settings.svelte";
-import { nowStr } from "$lib/utils/dates";
+import { nowStr, todayStr } from "$lib/utils/dates";
 
 const STORAGE_KEY = "sklad_vozidel_data";
 
@@ -30,10 +30,10 @@ function saveLocal(): void {
 
 let _vehicles = $state<Vehicle[]>(loadLocal());
 let _checked = $state<Set<string>>(new Set());
-let _lastImportChangedVins = $state<Set<string>>(new Set());
 let _syncState = $state<{ state: string; label: string }>({ state: "offline", label: "Offline" });
 let _onAuthExpired: (() => void) | null = null;
 let _authCheckInterval: ReturnType<typeof setInterval> | null = null;
+let _midnightTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const AUTH_CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
@@ -41,7 +41,6 @@ const AUTH_CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
 export function getVehicles(): Vehicle[] { return _vehicles; }
 export function getChecked(): Set<string> { return _checked; }
-export function getLastImportChangedVins(): Set<string> { return _lastImportChangedVins; }
 export function getSyncStatus(): { state: string; label: string } { return _syncState; }
 
 // ── Setters ──
@@ -56,11 +55,56 @@ export function toggleChecked(vin: string, value?: boolean): void {
 	else next.delete(vin);
 	_checked = next;
 }
-export function clearLastImportChanged(): void { _lastImportChangedVins = new Set(); }
-export function addImportChanged(vin: string): void {
-	const next = new Set(_lastImportChangedVins);
-	next.add(vin);
-	_lastImportChangedVins = next;
+
+// ── Changed fields (per-field change dots, shared via DB) ──
+
+/** Mark specific fields as changed today on a vehicle */
+export function markFieldChanged(v: Vehicle, ...fields: string[]): void {
+	const today = todayStr();
+	const existing = (v.changedDate === today && v.changedFields)
+		? new Set(v.changedFields.split(","))
+		: new Set<string>();
+	for (const f of fields) existing.add(f);
+	v.changedFields = [...existing].join(",");
+	v.changedDate = today;
+}
+
+/** Check if a specific field was changed today */
+export function isFieldChanged(v: Vehicle, field: string): boolean {
+	if (!v.changedFields || !v.changedDate) return false;
+	if (v.changedDate !== todayStr()) return false;
+	return v.changedFields.split(",").includes(field);
+}
+
+/** Clear all change dots that are from a previous day (midnight reset) */
+function clearExpiredChangeDots(): void {
+	const today = todayStr();
+	let changed = false;
+	for (const v of _vehicles) {
+		if (v.changedDate && v.changedDate !== today) {
+			v.changedFields = null;
+			v.changedDate = null;
+			changed = true;
+		}
+	}
+	if (changed) saveData();
+}
+
+/** Schedule midnight reset of change dots */
+function scheduleMidnightReset(): void {
+	if (_midnightTimeout) clearTimeout(_midnightTimeout);
+	if (!browser) return;
+
+	const now = new Date();
+	const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+	const ms = midnight.getTime() - now.getTime();
+
+	_midnightTimeout = setTimeout(() => {
+		console.log("Midnight: clearing change dots");
+		clearExpiredChangeDots();
+		// Schedule next midnight
+		scheduleMidnightReset();
+	}, ms);
 }
 
 // ── Auth expired callback ──
@@ -284,6 +328,70 @@ export function saveData(): void {
 	}
 }
 
+// ── Console commands ──
+
+function registerConsoleCommands(): void {
+	if (!browser) return;
+	(window as any).users = async () => {
+		if (!cloudActive()) {
+			console.log("%cNejsi v online režimu.", "color: #e67e22");
+			return;
+		}
+		try {
+			const res = await fetch(
+				getSbUrl() + "/rest/v1/presence?select=*",
+				{ headers: headers() },
+			);
+			if (!res.ok) throw new Error("HTTP " + res.status);
+			const rows: Array<{ user_name: string; last_seen: string }> = await res.json();
+			if (!rows.length) {
+				console.log("%cŽádní připojení uživatelé.", "color: #6b6b6b");
+				return;
+			}
+			console.log(`%c${rows.length} připojený(ch) uživatel(ů):`, "font-weight:bold");
+			for (const r of rows) {
+				const ago = Math.floor((Date.now() - new Date(r.last_seen).getTime()) / 1000);
+				const agoStr = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`;
+				console.log(`  • ${r.user_name}  (${agoStr} ago)`);
+			}
+		} catch (err) {
+			console.warn("Chyba při načítání uživatelů:", err);
+		}
+	};
+}
+
+// ── Presence heartbeat ──
+
+let _presenceInterval: ReturnType<typeof setInterval> | null = null;
+
+async function sendPresence(): Promise<void> {
+	if (!cloudActive() || !getUserName()) return;
+	try {
+		await fetch(getSbUrl() + "/rest/v1/presence", {
+			method: "POST",
+			headers: headers(),
+			body: JSON.stringify({
+				user_name: getUserName(),
+				last_seen: new Date().toISOString(),
+			}),
+		});
+	} catch { /* silent */ }
+}
+
+function startPresence(): void {
+	stopPresence();
+	if (!cloudActive()) return;
+	sendPresence();
+	_presenceInterval = setInterval(sendPresence, 30_000); // every 30s
+}
+
+function stopPresence(): void {
+	if (_presenceInterval) {
+		clearInterval(_presenceInterval);
+		_presenceInterval = null;
+	}
+}
+
 // ── Realtime ──
 
 export function startSync(): void {
@@ -303,6 +411,7 @@ export function startSync(): void {
 	if (!cloudActive()) {
 		// Local mode — stop auth checks, load from localStorage
 		stopAuthCheck();
+		stopPresence();
 		_vehicles = loadLocal();
 		setSyncState("offline", getSyncMode() === "supabase" ? "Klikni ⚙" : "Lokální režim");
 		return;
@@ -349,8 +458,11 @@ export function startSync(): void {
 
 	setChannel(newChannel);
 
-	// Start periodic auth validation
+	// Start periodic auth validation & presence
 	startAuthCheck();
+	startPresence();
+	scheduleMidnightReset();
+	clearExpiredChangeDots();
 }
 
 /** One-off auth check (used on focus/visibility) */
@@ -366,6 +478,7 @@ export function handleVisibilityChange(): void {
 		console.log("Tab aktivní — auth check + pull + kontrola channelu");
 		checkAuthOnce();
 		pullFromCloud();
+		sendPresence();
 		const ch = getChannel();
 		if (!ch || (ch as any).state !== "joined") {
 			console.log("Realtime channel mrtvý, reconnect…");
@@ -382,4 +495,8 @@ export function handleFocus(): void {
 	if (!cloudActive()) return;
 	checkAuthOnce();
 	pullFromCloud();
+	sendPresence();
 }
+
+// Init console commands
+registerConsoleCommands();

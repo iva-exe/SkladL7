@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { parseLines } from "$lib/utils/parser";
 	import { todayStr, lastWorkdayStr } from "$lib/utils/dates";
-	import { getVehicles, setVehicles, setVehicleMeta, saveData, pushLog, addImportChanged } from "$lib/stores/vehicles.svelte";
+	import { getVehicles, setVehicles, setVehicleMeta, saveData, pushLog, markFieldChanged } from "$lib/stores/vehicles.svelte";
 	import type { Vehicle } from "$lib/types";
 
 	interface Props {
@@ -30,6 +30,7 @@
 
 		for (const v of incoming) {
 			if (!map[v.vin]) {
+				// New vehicle
 				const nv: Vehicle = {
 					vin: v.vin,
 					model: v.model,
@@ -41,13 +42,17 @@
 					code: v.code,
 					lastChangedBy: null,
 					lastChangedAt: null,
+					changedFields: null,
+					changedDate: null,
 				};
+				markFieldChanged(nv, "model", "sklad", "code", "status", "dateIn");
 				setVehicleMeta(nv);
 				vehicles.push(nv);
-				addImportChanged(v.vin);
 				added++;
 			} else if (map[v.vin].status === "vyskladneno") {
-				Object.assign(map[v.vin], {
+				// Re-stocking
+				const existing = map[v.vin];
+				Object.assign(existing, {
 					status: "naskladneno",
 					dateIn: v.dateIn,
 					dateOut: null,
@@ -55,21 +60,26 @@
 					sklad: v.sklad,
 					code: v.code,
 				});
-				setVehicleMeta(map[v.vin]);
-				addImportChanged(v.vin);
+				markFieldChanged(existing, "status", "dateIn", "model", "sklad", "code");
+				setVehicleMeta(existing);
 				restocked++;
 			} else {
-				// Already naskladneno — update if changed
+				// Already naskladneno — update changed fields
 				const existing = map[v.vin];
-				if (existing.model !== v.model || existing.sklad !== v.sklad || existing.code !== v.code || existing.dateIn !== v.dateIn) {
+				const changed: string[] = [];
+				if (existing.model !== v.model) changed.push("model");
+				if (existing.sklad !== v.sklad) changed.push("sklad");
+				if (existing.code !== v.code) changed.push("code");
+				if (existing.dateIn !== v.dateIn) changed.push("dateIn");
+				if (changed.length) {
 					Object.assign(existing, {
 						model: v.model,
 						sklad: v.sklad,
 						code: v.code,
 						dateIn: v.dateIn,
 					});
+					markFieldChanged(existing, ...changed);
 					setVehicleMeta(existing);
-					addImportChanged(v.vin);
 				}
 			}
 		}
@@ -78,8 +88,8 @@
 			if (v.status === "naskladneno" && !inVins.has(v.vin)) {
 				v.status = "vyskladneno";
 				v.dateOut = lastWorkday;
+				markFieldChanged(v, "status", "dateOut");
 				setVehicleMeta(v);
-				addImportChanged(v.vin);
 				removed++;
 			}
 		}

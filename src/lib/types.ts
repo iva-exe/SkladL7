@@ -9,6 +9,10 @@ export interface Vehicle {
 	code: string;
 	lastChangedBy: string | null;
 	lastChangedAt: string | null;
+	/** Comma-separated list of fields changed today (e.g. "status,sklad,code") */
+	changedFields: string | null;
+	/** Date when changedFields were last set (dd.mm.yyyy) — auto-clears at midnight */
+	changedDate: string | null;
 }
 
 export interface VehicleRow {
@@ -22,6 +26,8 @@ export interface VehicleRow {
 	code: string;
 	last_changed_by: string | null;
 	last_changed_at: string | null;
+	changed_fields: string | null;
+	changed_date: string | null;
 }
 
 export interface LogEntry {
@@ -54,6 +60,8 @@ export function toLocal(r: VehicleRow): Vehicle {
 		code: r.code,
 		lastChangedBy: r.last_changed_by,
 		lastChangedAt: r.last_changed_at,
+		changedFields: r.changed_fields || null,
+		changedDate: r.changed_date || null,
 	};
 }
 
@@ -69,5 +77,7 @@ export function toRow(v: Vehicle): VehicleRow {
 		code: v.code || null,
 		last_changed_by: v.lastChangedBy || null,
 		last_changed_at: v.lastChangedAt || null,
+		changed_fields: v.changedFields || null,
+		changed_date: v.changedDate || null,
 	} as VehicleRow;
 }

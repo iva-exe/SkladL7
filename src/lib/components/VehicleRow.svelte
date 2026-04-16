@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Vehicle } from "$lib/types";
 	import { calcDays, yesterdayStr, fromIsoDate } from "$lib/utils/dates";
-	import { getLastImportChangedVins, setVehicleMeta, saveData, pushLog, addImportChanged } from "$lib/stores/vehicles.svelte";
+	import { setVehicleMeta, saveData, pushLog, markFieldChanged, isFieldChanged } from "$lib/stores/vehicles.svelte";
 	import { getUserName } from "$lib/stores/settings.svelte";
 	import Dropdown from "./Dropdown.svelte";
 
@@ -17,10 +17,17 @@
 	let codeValue = $state(vehicle.code || "");
 
 	const days = $derived(calcDays(vehicle.dateIn, vehicle.dateOut));
-	const isChanged = $derived(getLastImportChangedVins().has(vehicle.vin));
 	const statusLabel = $derived(vehicle.status === "naskladneno" ? "Naskladněno" : "Vyskladněno");
 	const statusBadge = $derived(vehicle.status === "naskladneno" ? "badge-green" : "badge-purple");
 	const tip = $derived(vehicle.lastChangedBy ? `${vehicle.lastChangedBy}, ${vehicle.lastChangedAt || ""}` : "");
+
+	// Per-field change detection
+	const chModel = $derived(isFieldChanged(vehicle, "model"));
+	const chSklad = $derived(isFieldChanged(vehicle, "sklad"));
+	const chCode = $derived(isFieldChanged(vehicle, "code"));
+	const chStatus = $derived(isFieldChanged(vehicle, "status"));
+	const chDateIn = $derived(isFieldChanged(vehicle, "dateIn"));
+	const chDateOut = $derived(isFieldChanged(vehicle, "dateOut"));
 
 	const statusOptions = [
 		{ val: "naskladneno", label: "Naskladněno" },
@@ -36,8 +43,8 @@
 		vehicle.status = val as Vehicle["status"];
 		if (val === "vyskladneno") vehicle.dateOut = vehicle.dateOut || yesterdayStr();
 		else vehicle.dateOut = null;
+		markFieldChanged(vehicle, "status");
 		setVehicleMeta(vehicle);
-		addImportChanged(vehicle.vin);
 		saveData();
 		onchange();
 		pushLog("Změna stavu", vehicle.vin, `${prev === "naskladneno" ? "Naskladněno" : "Vyskladněno"} → ${val === "naskladneno" ? "Naskladněno" : "Vyskladněno"}`);
@@ -49,8 +56,8 @@
 		// Manual sklad change clears the code
 		vehicle.code = "";
 		codeValue = "";
+		markFieldChanged(vehicle, "sklad", "code");
 		setVehicleMeta(vehicle);
-		addImportChanged(vehicle.vin);
 		saveData();
 		onchange();
 		pushLog("Změna skladu", vehicle.vin, `${prev} → ${val}`);
@@ -82,8 +89,8 @@
 			if (field === "dateOut") {
 				vehicle.status = vehicle[field] ? "vyskladneno" : "naskladneno";
 			}
+			markFieldChanged(vehicle, field);
 			setVehicleMeta(vehicle);
-			addImportChanged(vehicle.vin);
 			saveData();
 			cleanup();
 			onchange();
@@ -102,17 +109,19 @@
 		const prev = vehicle.code || "";
 		if (val !== prev) {
 			vehicle.code = val;
+			const changedList: string[] = ["code"];
 			// Revalidate sklad based on first character of new code
 			if (val) {
 				const newSklad = val.startsWith("D") ? "Klíčany" : "Měšice";
 				if (vehicle.sklad !== newSklad) {
 					const prevSklad = vehicle.sklad;
 					vehicle.sklad = newSklad;
+					changedList.push("sklad");
 					pushLog("Změna skladu", vehicle.vin, `${prevSklad} → ${newSklad} (auto z kódu)`);
 				}
 			}
+			markFieldChanged(vehicle, ...changedList);
 			setVehicleMeta(vehicle);
-			addImportChanged(vehicle.vin);
 			saveData();
 			pushLog("Změna kódu", vehicle.vin, `${prev || "—"} → ${val || "—"}`);
 		}
@@ -131,14 +140,15 @@
 		<input type="checkbox" checked={checked} data-vin={vehicle.vin} />
 	</td>
 	<td class="vin">
-		{vehicle.vin}{#if isChanged}<span class="change-dot"></span>{/if}
+		{vehicle.vin}
 		{#if tip}<span class="tooltip">{tip}</span>{/if}
 	</td>
-	<td>{vehicle.model}</td>
+	<td>{vehicle.model}{#if chModel}<span class="change-dot"></span>{/if}</td>
 	<td>
 		<Dropdown options={skladOptions} current={vehicle.sklad || ""} badgeClass="badge-sklad" onselect={onSkladChange}>
 			{vehicle.sklad || "—"}
 		</Dropdown>
+		{#if chSklad}<span class="change-dot"></span>{/if}
 		{#if editingCode}
 			<input
 				type="text"
@@ -154,23 +164,27 @@
 				{vehicle.code || "Zadejte kód"}
 			</span>
 		{/if}
+		{#if chCode}<span class="change-dot"></span>{/if}
 	</td>
 	<td>
 		<Dropdown options={statusOptions} current={vehicle.status} badgeClass={statusBadge} onselect={onStatusChange}>
 			{statusLabel}
 		</Dropdown>
+		{#if chStatus}<span class="change-dot"></span>{/if}
 	</td>
 	<td>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<span class="editable-date" onclick={(e) => editDate("dateIn", e.currentTarget as HTMLSpanElement)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter') editDate('dateIn', e.currentTarget as HTMLSpanElement); }}>
 			{vehicle.dateIn || "—"}
 		</span>
+		{#if chDateIn}<span class="change-dot"></span>{/if}
 	</td>
 	<td>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<span class="editable-date" onclick={(e) => editDate("dateOut", e.currentTarget as HTMLSpanElement)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter') editDate('dateOut', e.currentTarget as HTMLSpanElement); }}>
 			{vehicle.dateOut || "—"}
 		</span>
+		{#if chDateOut}<span class="change-dot"></span>{/if}
 	</td>
 	<td>{days !== null ? days : "—"}</td>
 	<td class="date-added">{vehicle.dateAdded || "—"}</td>
@@ -190,6 +204,7 @@
 		background: var(--changed);
 		margin-left: 4px;
 		vertical-align: middle;
+		box-shadow: 0 0 6px var(--changed), 0 0 2px var(--changed);
 	}
 	.editable-date {
 		cursor: pointer;
