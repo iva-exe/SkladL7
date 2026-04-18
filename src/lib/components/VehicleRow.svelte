@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Vehicle } from "$lib/types";
 	import { calcDays, yesterdayStr, fromIsoDate } from "$lib/utils/dates";
-	import { setVehicleMeta, saveData, pushLog, markFieldChanged, isFieldChanged } from "$lib/stores/vehicles.svelte";
+	import { setVehicleMeta, saveData, pushLog, markFieldChanged, isFieldChanged, isWholeRowChanged } from "$lib/stores/vehicles.svelte";
 	import { getUserName } from "$lib/stores/settings.svelte";
 	import Dropdown from "./Dropdown.svelte";
 
@@ -21,13 +21,15 @@
 	const statusBadge = $derived(vehicle.status === "naskladneno" ? "badge-green" : "badge-purple");
 	const tip = $derived(vehicle.lastChangedBy ? `${vehicle.lastChangedBy}, ${vehicle.lastChangedAt || ""}` : "");
 
+	// Whole-row change (e.g. newly imported) — suppresses per-field dots
+	const chWhole = $derived(isWholeRowChanged(vehicle));
 	// Per-field change detection
-	const chModel = $derived(isFieldChanged(vehicle, "model"));
-	const chSklad = $derived(isFieldChanged(vehicle, "sklad"));
-	const chCode = $derived(isFieldChanged(vehicle, "code"));
-	const chStatus = $derived(isFieldChanged(vehicle, "status"));
-	const chDateIn = $derived(isFieldChanged(vehicle, "dateIn"));
-	const chDateOut = $derived(isFieldChanged(vehicle, "dateOut"));
+	const chModel = $derived(!chWhole && isFieldChanged(vehicle, "model"));
+	const chSklad = $derived(!chWhole && isFieldChanged(vehicle, "sklad"));
+	const chCode = $derived(!chWhole && isFieldChanged(vehicle, "code"));
+	const chStatus = $derived(!chWhole && isFieldChanged(vehicle, "status"));
+	const chDateIn = $derived(!chWhole && isFieldChanged(vehicle, "dateIn"));
+	const chDateOut = $derived(!chWhole && isFieldChanged(vehicle, "dateOut"));
 
 	const statusOptions = [
 		{ val: "naskladneno", label: "Naskladněno" },
@@ -141,6 +143,7 @@
 	</td>
 	<td class="vin">
 		{vehicle.vin}
+		{#if chWhole}<span class="change-dot"></span>{/if}
 		{#if tip}<span class="tooltip">{tip}</span>{/if}
 	</td>
 	<td>{vehicle.model}{#if chModel}<span class="change-dot"></span>{/if}</td>

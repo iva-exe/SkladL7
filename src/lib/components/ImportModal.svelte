@@ -28,6 +28,9 @@
 		const lastWorkday = lastWorkdayStr();
 		let added = 0, restocked = 0, removed = 0;
 
+		// Track per-vehicle changes for detailed import log
+		const changeDetails: string[] = [];
+
 		for (const v of incoming) {
 			if (!map[v.vin]) {
 				// New vehicle
@@ -45,9 +48,10 @@
 					changedFields: null,
 					changedDate: null,
 				};
-				markFieldChanged(nv, "model", "sklad", "code", "status", "dateIn");
+				markFieldChanged(nv, "__all__");
 				setVehicleMeta(nv);
 				vehicles.push(nv);
+				changeDetails.push(`[+] ${v.vin} — nové (${v.model})`);
 				added++;
 			} else if (map[v.vin].status === "vyskladneno") {
 				// Re-stocking
@@ -60,17 +64,19 @@
 					sklad: v.sklad,
 					code: v.code,
 				});
-				markFieldChanged(existing, "status", "dateIn", "model", "sklad", "code");
+				markFieldChanged(existing, "__all__");
 				setVehicleMeta(existing);
+				changeDetails.push(`[↻] ${v.vin} — znovu naskladněno`);
 				restocked++;
 			} else {
 				// Already naskladneno — update changed fields
 				const existing = map[v.vin];
 				const changed: string[] = [];
-				if (existing.model !== v.model) changed.push("model");
-				if (existing.sklad !== v.sklad) changed.push("sklad");
-				if (existing.code !== v.code) changed.push("code");
-				if (existing.dateIn !== v.dateIn) changed.push("dateIn");
+				const parts: string[] = [];
+				if (existing.model !== v.model) { changed.push("model"); parts.push(`model: ${existing.model}→${v.model}`); }
+				if (existing.sklad !== v.sklad) { changed.push("sklad"); parts.push(`sklad: ${existing.sklad}→${v.sklad}`); }
+				if (existing.code !== v.code) { changed.push("code"); parts.push(`kód: ${existing.code || "—"}→${v.code || "—"}`); }
+				if (existing.dateIn !== v.dateIn) { changed.push("dateIn"); parts.push(`datum: ${existing.dateIn}→${v.dateIn}`); }
 				if (changed.length) {
 					Object.assign(existing, {
 						model: v.model,
@@ -80,6 +86,7 @@
 					});
 					markFieldChanged(existing, ...changed);
 					setVehicleMeta(existing);
+					changeDetails.push(`[~] ${v.vin} — ${parts.join(", ")}`);
 				}
 			}
 		}
@@ -90,6 +97,7 @@
 				v.dateOut = lastWorkday;
 				markFieldChanged(v, "status", "dateOut");
 				setVehicleMeta(v);
+				changeDetails.push(`[-] ${v.vin} — vyskladněno`);
 				removed++;
 			}
 		}
@@ -98,7 +106,13 @@
 		saveData();
 		open = false;
 		importText = "";
-		pushLog("Import", null, `+${added} nových, ${restocked} znovu, -${removed} vyskladněno`);
+
+		// Build import summary with per-vehicle detail
+		const summary = `+${added} nových | ${restocked} znovu | -${removed} vyskladněno`;
+		const detail = changeDetails.length
+			? summary + "\n" + changeDetails.join("\n")
+			: summary;
+		pushLog("Import", null, detail);
 		ontoast(`Import dokončen — ${incoming.length} vozidel zpracováno.`);
 	}
 

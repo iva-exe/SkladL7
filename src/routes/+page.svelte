@@ -196,7 +196,12 @@
 				</svg>
 			</button>
 		</div>
-		<button class="btn" onclick={copyVin}>Kopírovat VIN</button>
+		<button class="btn" onclick={copyVin}>
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+			</svg>
+			Kopírovat VIN
+		</button>
 		<span class="excel-wrap">
 			<button class="btn" class:btn-filtered={isFiltered} onclick={downloadExcel}>
 				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -210,8 +215,18 @@
 				<span class="filter-badge">Filtrováno</span>
 			{/if}
 		</span>
-		<button class="btn" style="color: var(--accent)" onclick={deleteSelected}>Smazat</button>
-		<button class="btn-primary btn" onclick={() => { importOpen = true; }}>Vložit seznam</button>
+		<button class="btn" style="color: var(--accent)" onclick={deleteSelected}>
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+			</svg>
+			Smazat
+		</button>
+		<button class="btn-primary btn" onclick={() => { importOpen = true; }}>
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/>
+			</svg>
+			Vložit seznam
+		</button>
 	</div>
 </div>
 

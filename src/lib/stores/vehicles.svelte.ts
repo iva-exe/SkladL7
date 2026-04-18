@@ -76,6 +76,13 @@ export function isFieldChanged(v: Vehicle, field: string): boolean {
 	return v.changedFields.split(",").includes(field);
 }
 
+/** Check if the whole row was marked changed today (e.g. newly imported) */
+export function isWholeRowChanged(v: Vehicle): boolean {
+	if (!v.changedFields || !v.changedDate) return false;
+	if (v.changedDate !== todayStr()) return false;
+	return v.changedFields.split(",").includes("__all__");
+}
+
 /** Clear all change dots that are from a previous day (midnight reset) */
 function clearExpiredChangeDots(): void {
 	const today = todayStr();
