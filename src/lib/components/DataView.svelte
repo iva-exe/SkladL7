@@ -197,19 +197,19 @@
 		opacity: 0.4;
 	}
 
-	/* ── 75/25 layout (left = summary+capsules, right = chart) ── */
+	/* ── Layout: chart panel scales linearly from 1/3 (Mac) to 1/4 (ultrawide) ──
+	   • viewport ≤ 1500px → chart = 33vw (≈ 1/3)
+	   • viewport ≥ 2400px → chart = 25vw (≈ 1/4)
+	   • between           → linear interpolation via clamp()
+	   • viewport ≤ 1100px → single column stack                                   */
 	.data-grid {
 		display: grid;
-		grid-template-columns: 3fr 1fr;
+		grid-template-columns: minmax(0, 1fr) clamp(25vw, calc(33vw - (100vw - 1500px) * 8 / 900), 33vw);
 		gap: 16px;
 		align-items: start;
 	}
-	.left-col {
-		min-width: 0;
-	}
-	.chart-col {
-		min-width: 0;
-	}
+	.left-col { min-width: 0; }
+	.chart-col { min-width: 0; }
 	.chart-sticky {
 		position: sticky;
 		top: 12px;
