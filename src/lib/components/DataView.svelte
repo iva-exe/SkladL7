@@ -197,14 +197,15 @@
 		opacity: 0.4;
 	}
 
-	/* ── Layout: chart panel scales linearly from 1/3 (Mac) to 1/4 (ultrawide) ──
-	   • viewport ≤ 1500px → chart = 33vw (≈ 1/3)
-	   • viewport ≥ 2400px → chart = 25vw (≈ 1/4)
-	   • between           → linear interpolation via clamp()
-	   • viewport ≤ 1100px → single column stack                                   */
+	/* ── Layout: chart panel keeps a consistent absolute size across screens ──
+	   • viewport ≤ 1100px → single column stack
+	   • else              → clamp(360px … 38vw … 580px)
+	     - On Mac (~1500px): 38vw ≈ 570px → ~38% of width (feels larger than 1/3)
+	     - On ultrawide (~2560px): capped at 580px → ~22% of width (no longer huge)
+	     - Typical desktop (1700–2000px) flows linearly between caps               */
 	.data-grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) clamp(25vw, calc(33vw - (100vw - 1500px) * 8 / 900), 33vw);
+		grid-template-columns: minmax(0, 1fr) clamp(360px, 38vw, 580px);
 		gap: 16px;
 		align-items: start;
 	}
