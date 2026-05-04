@@ -123,3 +123,86 @@ export function aggregateMonthly(vehicles: Vehicle[]): MonthBucket[] {
 	// Sort newest first
 	return [...buckets.values()].sort((a, b) => b.key.localeCompare(a.key));
 }
+
+/**
+ * Average days each vehicle spent in storage so far.
+ * = (sum of every vehicle's storage span up to today or its dateOut) / (number of vehicles that have a dateIn).
+ */
+export function averageDaysPerVehicle(vehicles: Vehicle[]): number {
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	let totalDays = 0;
+	let count = 0;
+	for (const v of vehicles) {
+		const inDate = parseDateToObj(v.dateIn);
+		if (!inDate) continue;
+		const outDate = parseDateToObj(v.dateOut) ?? today;
+		if (outDate < inDate) continue;
+		const days = Math.floor((outDate.getTime() - inDate.getTime()) / 86400000) + 1;
+		totalDays += days;
+		count++;
+	}
+	if (!count) return 0;
+	return totalDays / count;
+}
+
+export interface ChartPoint {
+	/** Sort/key value (e.g. "2026-06" or day number) */
+	key: string;
+	/** X-axis label shown to user */
+	label: string;
+	/** Y value */
+	value: number;
+}
+
+/**
+ * Monthly snapshot: end-of-month count of vehicles still in storage on the last day of each active month.
+ * Returned chronologically (oldest first).
+ */
+export function monthlySnapshotSeries(vehicles: Vehicle[]): ChartPoint[] {
+	// Use the same set of months as aggregateMonthly so the chart stays in sync with the capsules
+	const buckets = aggregateMonthly(vehicles);
+	const ordered = [...buckets].sort((a, b) => a.key.localeCompare(b.key));
+	const out: ChartPoint[] = [];
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	for (const b of ordered) {
+		// Snapshot date = last day of month, but capped at today (don't snapshot future)
+		const lastDay = new Date(b.year, b.month, 0); // day 0 of next month = last day of this month
+		const snap = lastDay > today ? today : lastDay;
+		let count = 0;
+		for (const v of vehicles) {
+			const inDate = parseDateToObj(v.dateIn);
+			if (!inDate || inDate > snap) continue;
+			const outDate = parseDateToObj(v.dateOut);
+			if (!outDate || outDate > snap) count++;
+		}
+		out.push({ key: b.key, label: b.label, value: count });
+	}
+	return out;
+}
+
+/**
+ * Daily snapshot for one specific month: for each day, count vehicles in storage at end-of-day.
+ * If month is current, only days up to today are returned.
+ */
+export function dailySnapshotSeries(vehicles: Vehicle[], year: number, month1: number): ChartPoint[] {
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	const lastDayOfMonth = new Date(year, month1, 0).getDate();
+	const isCurrent = today.getFullYear() === year && today.getMonth() + 1 === month1;
+	const lastDay = isCurrent ? today.getDate() : lastDayOfMonth;
+	const out: ChartPoint[] = [];
+	for (let d = 1; d <= lastDay; d++) {
+		const snap = new Date(year, month1 - 1, d);
+		let count = 0;
+		for (const v of vehicles) {
+			const inDate = parseDateToObj(v.dateIn);
+			if (!inDate || inDate > snap) continue;
+			const outDate = parseDateToObj(v.dateOut);
+			if (!outDate || outDate > snap) count++;
+		}
+		out.push({ key: String(d), label: `${d}.${month1}.`, value: count });
+	}
+	return out;
+}

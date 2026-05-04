@@ -1,14 +1,19 @@
 <script lang="ts">
 	import { getVehicles } from "$lib/stores/vehicles.svelte";
-	import { aggregateMonthly } from "$lib/utils/monthlyStats";
+	import {
+		aggregateMonthly,
+		averageDaysPerVehicle,
+		monthlySnapshotSeries,
+		dailySnapshotSeries,
+		type ChartPoint,
+	} from "$lib/utils/monthlyStats";
+	import Chart from "./Chart.svelte";
 
 	const vehicles = $derived(getVehicles());
 	const months = $derived(aggregateMonthly(vehicles));
 
-	// Highlight: top totalDays across visible months → drives the bar fill
 	const maxDays = $derived(months.reduce((m, b) => Math.max(m, b.totalDays), 0) || 1);
 
-	// Grand totals across all months
 	const grandTotal = $derived(months.reduce((acc, b) => {
 		acc.days += b.totalDays;
 		acc.arrived += b.arrived;
@@ -16,16 +21,40 @@
 		return acc;
 	}, { days: 0, arrived: 0, departed: 0 }));
 
+	const avgDays = $derived(averageDaysPerVehicle(vehicles));
+
 	const now = new Date();
 	const currentKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
+
+	// Selected month for chart drill-down (toggle). null = show monthly overview.
+	let selectedKey = $state<string | null>(null);
+
+	function toggleMonth(key: string): void {
+		selectedKey = selectedKey === key ? null : key;
+	}
+
+	const selectedBucket = $derived(selectedKey ? months.find((m) => m.key === selectedKey) ?? null : null);
+
+	const chartData = $derived<ChartPoint[]>(
+		selectedBucket
+			? dailySnapshotSeries(vehicles, selectedBucket.year, selectedBucket.month)
+			: monthlySnapshotSeries(vehicles),
+	);
+	const chartTitle = $derived(selectedBucket ? `Vozidla na skladě — ${selectedBucket.label}` : "Vozidla na skladě");
+	const chartSubtitle = $derived(selectedBucket ? "Denní snímek (klikni znovu na měsíc pro celkový přehled)" : "Stav ke konci každého měsíce");
 
 	function fmt(n: number): string {
 		return n.toLocaleString("cs-CZ");
 	}
 
+	function fmtAvg(n: number): string {
+		return n.toLocaleString("cs-CZ", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+	}
+
 	function dayWord(n: number): string {
-		if (n === 1) return "den";
-		if (n >= 2 && n <= 4) return "dny";
+		const r = Math.round(n);
+		if (r === 1) return "den";
+		if (r >= 2 && r <= 4) return "dny";
 		return "dní";
 	}
 
@@ -43,89 +72,107 @@
 			Zatím žádná data k zobrazení.
 		</div>
 	{:else}
-		<!-- Souhrnná řádka -->
-		<div class="summary">
-			<div class="sum-card">
-				<div class="sum-label">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="12" cy="12" r="6"/><polyline points="12 10 12 12 13 13"/><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05"/><path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.64h2.72a2 2 0 0 0 2-1.61l.81-4.05"/>
-					</svg>
-					Celkem dní na skladě
-				</div>
-				<div class="sum-value sum-blue">{fmt(grandTotal.days)} <span class="sum-unit">{dayWord(grandTotal.days)}</span></div>
-			</div>
-			<div class="sum-card">
-				<div class="sum-label">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
-					</svg>
-					Celkem naskladněno
-				</div>
-				<div class="sum-value sum-green">{fmt(grandTotal.arrived)}</div>
-			</div>
-			<div class="sum-card">
-				<div class="sum-label">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
-					</svg>
-					Celkem vyskladněno
-				</div>
-				<div class="sum-value sum-purple">{fmt(grandTotal.departed)}</div>
-			</div>
-			<div class="sum-card">
-				<div class="sum-label">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>
-					</svg>
-					Měsíců v přehledu
-				</div>
-				<div class="sum-value">{months.length}</div>
-			</div>
-		</div>
-
-		<!-- Měsíční kapsle -->
-		<div class="months-grid">
-			{#each months as b}
-				{@const pct = Math.round((b.totalDays / maxDays) * 100)}
-				{@const isCurrent = b.key === currentKey}
-				<div class="month-card" class:current={isCurrent}>
-					<div class="bar-fill" style="width: {pct}%"></div>
-					<div class="month-content">
-						<div class="month-period">
-							<span class="period-label">{b.label}</span>
-							{#if isCurrent}
-								<span class="current-badge">Aktuální</span>
-							{/if}
-							{#if b.activeVehicles}
-								<span class="active-badge">{b.activeVehicles} {vehicleWord(b.activeVehicles)}</span>
-							{/if}
+		<div class="data-grid">
+			<!-- LEFT: summary + capsules -->
+			<div class="left-col">
+				<div class="summary">
+					<div class="sum-card">
+						<div class="sum-label">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<circle cx="12" cy="12" r="6"/><polyline points="12 10 12 12 13 13"/><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05"/><path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.64h2.72a2 2 0 0 0 2-1.61l.81-4.05"/>
+							</svg>
+							Celkem dní na skladě
 						</div>
-						<div class="month-stats">
-							<div class="stat stat-in">
-								<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-									<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
-								</svg>
-								<span class="stat-value">{b.arrived}</span>
-								<span class="stat-label">naskladněno</span>
-							</div>
-							<div class="stat stat-out">
-								<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-									<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
-								</svg>
-								<span class="stat-value">{b.departed}</span>
-								<span class="stat-label">vyskladněno</span>
-							</div>
-							<div class="stat stat-days">
-								<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-									<circle cx="12" cy="12" r="6"/><polyline points="12 10 12 12 13 13"/><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05"/><path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.64h2.72a2 2 0 0 0 2-1.61l.81-4.05"/>
-								</svg>
-								<span class="stat-value-big">{fmt(b.totalDays)}</span>
-								<span class="stat-label">{dayWord(b.totalDays)} celkem</span>
-							</div>
+						<div class="sum-value sum-blue">{fmt(grandTotal.days)} <span class="sum-unit">{dayWord(grandTotal.days)}</span></div>
+					</div>
+					<div class="sum-card">
+						<div class="sum-label">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+							</svg>
+							Celkem naskladněno
 						</div>
+						<div class="sum-value sum-green">{fmt(grandTotal.arrived)}</div>
+					</div>
+					<div class="sum-card">
+						<div class="sum-label">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
+							</svg>
+							Celkem vyskladněno
+						</div>
+						<div class="sum-value sum-purple">{fmt(grandTotal.departed)}</div>
+					</div>
+					<div class="sum-card">
+						<div class="sum-label">
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/>
+							</svg>
+							Průměr dní / vozidlo
+						</div>
+						<div class="sum-value">{fmtAvg(avgDays)} <span class="sum-unit">{dayWord(avgDays)}</span></div>
 					</div>
 				</div>
-			{/each}
+
+				<div class="months-grid">
+					{#each months as b}
+						{@const pct = Math.round((b.totalDays / maxDays) * 100)}
+						{@const isCurrent = b.key === currentKey}
+						{@const isSelected = b.key === selectedKey}
+						<button
+							type="button"
+							class="month-card"
+							class:current={isCurrent}
+							class:selected={isSelected}
+							onclick={() => toggleMonth(b.key)}
+							aria-pressed={isSelected}
+						>
+							<div class="bar-fill" style="width: {pct}%"></div>
+							<div class="month-content">
+								<div class="month-period">
+									<span class="period-label">{b.label}</span>
+									{#if isCurrent}
+										<span class="current-badge">Aktuální</span>
+									{/if}
+									{#if b.activeVehicles}
+										<span class="active-badge">{b.activeVehicles} {vehicleWord(b.activeVehicles)}</span>
+									{/if}
+								</div>
+								<div class="month-stats">
+									<div class="stat stat-in">
+										<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+										</svg>
+										<span class="stat-value">{b.arrived}</span>
+										<span class="stat-label">naskladněno</span>
+									</div>
+									<div class="stat stat-out">
+										<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
+										</svg>
+										<span class="stat-value">{b.departed}</span>
+										<span class="stat-label">vyskladněno</span>
+									</div>
+									<div class="stat stat-days">
+										<svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<circle cx="12" cy="12" r="6"/><polyline points="12 10 12 12 13 13"/><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05"/><path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.64h2.72a2 2 0 0 0 2-1.61l.81-4.05"/>
+										</svg>
+										<span class="stat-value-big">{fmt(b.totalDays)}</span>
+										<span class="stat-label">{dayWord(b.totalDays)} celkem</span>
+									</div>
+								</div>
+							</div>
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<!-- RIGHT: sticky chart panel -->
+			<aside class="chart-col">
+				<div class="chart-sticky">
+					<Chart data={chartData} title={chartTitle} subtitle={chartSubtitle} />
+				</div>
+			</aside>
 		</div>
 	{/if}
 </div>
@@ -135,7 +182,6 @@
 		padding: 16px 32px 32px;
 	}
 
-	/* ── Empty state (matches LogView) ── */
 	.data-empty {
 		text-align: center;
 		padding: 80px 32px;
@@ -151,10 +197,32 @@
 		opacity: 0.4;
 	}
 
+	/* ── 75/25 layout (left = summary+capsules, right = chart) ── */
+	.data-grid {
+		display: grid;
+		grid-template-columns: 3fr 1fr;
+		gap: 16px;
+		align-items: start;
+	}
+	.left-col {
+		min-width: 0;
+	}
+	.chart-col {
+		min-width: 0;
+	}
+	.chart-sticky {
+		position: sticky;
+		top: 12px;
+	}
+	@media (max-width: 1100px) {
+		.data-grid { grid-template-columns: 1fr; }
+		.chart-sticky { position: static; }
+	}
+
 	/* ── Summary cards (top row) ── */
 	.summary {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: 8px;
 		margin-bottom: 16px;
 	}
@@ -168,9 +236,7 @@
 		gap: 4px;
 		transition: border-color 0.12s;
 	}
-	.sum-card:hover {
-		border-color: var(--border-strong);
-	}
+	.sum-card:hover { border-color: var(--border-strong); }
 	.sum-label {
 		font-size: 11px;
 		font-weight: 600;
@@ -198,20 +264,17 @@
 	.sum-green { color: var(--green); }
 	.sum-purple { color: var(--purple); }
 
-	/* ── Monthly capsule grid — responsive on ultrawide ── */
+	/* ── Monthly capsule grid ── */
 	.months-grid {
 		display: grid;
 		grid-template-columns: 1fr;
 		gap: 6px;
 	}
-	@media (min-width: 1100px) {
+	@media (min-width: 1700px) {
 		.months-grid { grid-template-columns: repeat(2, 1fr); }
 	}
-	@media (min-width: 1700px) {
+	@media (min-width: 2400px) {
 		.months-grid { grid-template-columns: repeat(3, 1fr); }
-	}
-	@media (min-width: 2300px) {
-		.months-grid { grid-template-columns: repeat(4, 1fr); }
 	}
 
 	.month-card {
@@ -220,20 +283,30 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		overflow: hidden;
-		transition: background 0.1s, border-color 0.12s;
+		transition: background 0.1s, border-color 0.12s, box-shadow 0.12s;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+		padding: 0;
+		width: 100%;
 	}
 	.month-card:hover {
 		background: var(--surface);
 		border-color: var(--border-strong);
 	}
-	/* Current month — subtle accent left border + slight tinted bg */
 	.month-card.current {
 		border-color: var(--accent);
 		background: var(--accent-bg);
 	}
-	.month-card.current:hover {
-		background: var(--accent-bg);
-		filter: brightness(0.985);
+	.month-card.current:hover { filter: brightness(0.985); }
+	.month-card.selected {
+		border-color: #2563eb;
+		box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+	}
+	.month-card.current.selected {
+		border-color: #2563eb;
+		box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
 	}
 	.bar-fill {
 		position: absolute;
@@ -244,9 +317,7 @@
 		z-index: 0;
 		transition: width 0.4s ease;
 	}
-	.month-card.current .bar-fill {
-		background: rgba(162, 26, 25, 0.06);
-	}
+	.month-card.current .bar-fill { background: rgba(162, 26, 25, 0.06); }
 	.month-content {
 		position: relative;
 		z-index: 1;
@@ -289,10 +360,7 @@
 		color: var(--text-secondary);
 		white-space: nowrap;
 	}
-	.month-card.current .active-badge {
-		background: var(--bg);
-	}
-
+	.month-card.current .active-badge { background: var(--bg); }
 	.month-stats {
 		display: flex;
 		align-items: center;
