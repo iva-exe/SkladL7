@@ -52,15 +52,32 @@
 		return ticks;
 	});
 
-	// X axis labels — pick at most 6 evenly spaced
+	// X axis labels — prefer points tagged with axisTick (e.g. 1st of each month).
+	// Otherwise pick at most 6 evenly spaced points and use their tooltip label.
 	const xLabels = $derived.by(() => {
 		if (!points.length) return [];
+		const tagged = points
+			.map((p, i) => ({ ...p, idx: i, text: p.axisTick }))
+			.filter((p) => p.text);
+		if (tagged.length) {
+			// Drop labels that would visually overlap (min ~50px between)
+			const minGap = (W / Math.max(1, tagged.length)) > 50 ? 0 : 50;
+			if (minGap === 0) return tagged.map((p) => ({ ...p, text: p.text! }));
+			const out: typeof tagged = [];
+			for (const t of tagged) {
+				if (!out.length || t.x - out[out.length - 1].x >= minGap) out.push(t);
+			}
+			return out.map((p) => ({ ...p, text: p.text! }));
+		}
 		const max = 6;
-		if (points.length <= max) return points.map((p, i) => ({ ...p, idx: i }));
+		if (points.length <= max) return points.map((p, i) => ({ ...p, idx: i, text: p.label }));
 		const step = (points.length - 1) / (max - 1);
 		const idxs = Array.from({ length: max }, (_, i) => Math.round(i * step));
-		return idxs.map((i) => ({ ...points[i], idx: i }));
+		return idxs.map((i) => ({ ...points[i], idx: i, text: points[i].label }));
 	});
+
+	// Hide individual dots when chart is dense (>50 points) — line + area + hover dot are enough
+	const showDots = $derived(points.length <= 50);
 
 	// Hover state
 	let hoverIdx = $state<number | null>(null);
@@ -121,14 +138,18 @@
 				<path d={areaPath} class="area" />
 				<path d={linePath} class="line" />
 
-				<!-- Data dots -->
-				{#each points as p, i}
-					<circle cx={p.x} cy={p.y} r={hoverIdx === i ? 4 : 2.5} class="dot" class:dot-active={hoverIdx === i} />
-				{/each}
+				<!-- Data dots (only when sparse; hover dot always renders below) -->
+				{#if showDots}
+					{#each points as p, i}
+						<circle cx={p.x} cy={p.y} r={hoverIdx === i ? 4 : 2.5} class="dot" class:dot-active={hoverIdx === i} />
+					{/each}
+				{:else if hoverPoint}
+					<circle cx={hoverPoint.x} cy={hoverPoint.y} r={4} class="dot dot-active" />
+				{/if}
 
 				<!-- X labels -->
 				{#each xLabels as l}
-					<text x={l.x} y={H - 12} class="axis-label" text-anchor="middle">{l.label}</text>
+					<text x={l.x} y={H - 12} class="axis-label" text-anchor="middle">{l.text}</text>
 				{/each}
 
 				<!-- Hover line -->

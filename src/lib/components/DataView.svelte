@@ -3,7 +3,7 @@
 	import {
 		aggregateMonthly,
 		averageDaysPerVehicle,
-		monthlySnapshotSeries,
+		fullDailySnapshotSeries,
 		dailySnapshotSeries,
 		type ChartPoint,
 	} from "$lib/utils/monthlyStats";
@@ -38,10 +38,10 @@
 	const chartData = $derived<ChartPoint[]>(
 		selectedBucket
 			? dailySnapshotSeries(vehicles, selectedBucket.year, selectedBucket.month)
-			: monthlySnapshotSeries(vehicles),
+			: fullDailySnapshotSeries(vehicles),
 	);
 	const chartTitle = $derived(selectedBucket ? `Vozidla na skladě — ${selectedBucket.label}` : "Vozidla na skladě");
-	const chartSubtitle = $derived(selectedBucket ? "Denní snímek (klikni znovu na měsíc pro celkový přehled)" : "Stav ke konci každého měsíce");
+	const chartSubtitle = $derived(selectedBucket ? "Denní snímek (klikni znovu na měsíc pro celkový přehled)" : "Denní snímek za celé období");
 
 	function fmt(n: number): string {
 		return n.toLocaleString("cs-CZ");

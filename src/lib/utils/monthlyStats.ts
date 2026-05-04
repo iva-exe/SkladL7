@@ -149,11 +149,18 @@ export function averageDaysPerVehicle(vehicles: Vehicle[]): number {
 export interface ChartPoint {
 	/** Sort/key value (e.g. "2026-06" or day number) */
 	key: string;
-	/** X-axis label shown to user */
+	/** Tooltip label shown on hover */
 	label: string;
 	/** Y value */
 	value: number;
+	/** Optional: short label drawn on X axis (e.g. "Čvn 2026"). When any point sets this, Chart prefers them over evenly-spaced labels. */
+	axisTick?: string;
 }
+
+const MONTH_SHORT_CS = [
+	"Led", "Úno", "Bře", "Dub", "Kvě", "Čvn",
+	"Čvc", "Srp", "Zář", "Říj", "Lis", "Pro",
+];
 
 /**
  * Monthly snapshot: end-of-month count of vehicles still in storage on the last day of each active month.
@@ -178,6 +185,54 @@ export function monthlySnapshotSeries(vehicles: Vehicle[]): ChartPoint[] {
 			if (!outDate || outDate > snap) count++;
 		}
 		out.push({ key: b.key, label: b.label, value: count });
+	}
+	return out;
+}
+
+/**
+ * Full daily snapshot from the earliest dateIn through today.
+ * Each day is one chart point. The 1st of every month (and the very first day)
+ * is tagged with axisTick so the chart can render month labels along the X axis.
+ */
+export function fullDailySnapshotSeries(vehicles: Vehicle[]): ChartPoint[] {
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+
+	// Find earliest dateIn
+	let earliest: Date | null = null;
+	for (const v of vehicles) {
+		const d = parseDateToObj(v.dateIn);
+		if (!d) continue;
+		if (!earliest || d < earliest) earliest = d;
+	}
+	if (!earliest) return [];
+
+	const out: ChartPoint[] = [];
+	const cursor = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate());
+	while (cursor <= today) {
+		let count = 0;
+		for (const v of vehicles) {
+			const inDate = parseDateToObj(v.dateIn);
+			if (!inDate || inDate > cursor) continue;
+			const outDate = parseDateToObj(v.dateOut);
+			if (!outDate || outDate > cursor) count++;
+		}
+		const y = cursor.getFullYear();
+		const m1 = cursor.getMonth() + 1;
+		const d = cursor.getDate();
+		const key = `${y}-${String(m1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+		const isFirstOfMonth = d === 1;
+		const isVeryFirst = out.length === 0;
+		const point: ChartPoint = {
+			key,
+			label: `${d}.${m1}.${y}`,
+			value: count,
+		};
+		if (isFirstOfMonth || isVeryFirst) {
+			point.axisTick = `${MONTH_SHORT_CS[m1 - 1]} ${y}`;
+		}
+		out.push(point);
+		cursor.setDate(cursor.getDate() + 1);
 	}
 	return out;
 }
