@@ -9,11 +9,12 @@
 	import ImportModal from "$lib/components/ImportModal.svelte";
 	import SettingsModal from "$lib/components/SettingsModal.svelte";
 	import LogView from "$lib/components/LogView.svelte";
+	import DataView from "$lib/components/DataView.svelte";
 	import Toast from "$lib/components/Toast.svelte";
 
 	const CURRENT_VERSION = __BUILD_ID__;
 
-	let activeTab = $state<"seznam" | "log">("seznam");
+	let activeTab = $state<"seznam" | "data" | "log">("seznam");
 	let importOpen = $state(false);
 	let settingsOpen = $state(false);
 	let toastRef: ReturnType<typeof Toast> | undefined = $state();
@@ -72,7 +73,7 @@
 		showToast(`Export ${filteredVehicles.length} vozidel do Excelu.`);
 	}
 
-	function switchTab(tab: "seznam" | "log"): void {
+	function switchTab(tab: "seznam" | "data" | "log"): void {
 		activeTab = tab;
 	}
 
@@ -232,12 +233,15 @@
 
 <div class="tab-bar">
 	<button class="tab-btn" class:active={activeTab === "seznam"} onclick={() => switchTab("seznam")}>Seznam</button>
+	<button class="tab-btn" class:active={activeTab === "data"} onclick={() => switchTab("data")}>Data</button>
 	<button class="tab-btn" class:active={activeTab === "log"} onclick={() => switchTab("log")}>Log</button>
 </div>
 
 {#if activeTab === "seznam"}
 	<Toolbar />
 	<VehicleTable />
+{:else if activeTab === "data"}
+	<DataView />
 {:else}
 	<LogView />
 {/if}
