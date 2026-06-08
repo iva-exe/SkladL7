@@ -146,10 +146,10 @@
 		{#if chWhole}<span class="change-dot"></span>{/if}
 		{#if tip}<span class="tooltip">{tip}</span>{/if}
 	</td>
-	<td>{vehicle.model}{#if chModel}<span class="change-dot"></span>{/if}</td>
+	<td>{#if vehicle.model}{vehicle.model}{:else}<span class="missing">chybí</span>{/if}{#if chModel}<span class="change-dot"></span>{/if}</td>
 	<td>
 		<Dropdown options={skladOptions} current={vehicle.sklad || ""} badgeClass="badge-sklad" onselect={onSkladChange}>
-			{vehicle.sklad || "—"}
+			{#if vehicle.sklad}{vehicle.sklad}{:else}<span class="missing">chybí</span>{/if}
 		</Dropdown>
 		{#if chSklad}<span class="change-dot"></span>{/if}
 		{#if editingCode}
@@ -198,6 +198,12 @@
 		font-family: "DM Mono", monospace;
 		font-size: 12px;
 		letter-spacing: 0.02em;
+	}
+	.missing {
+		color: var(--accent);
+		font-weight: 600;
+		font-style: italic;
+		font-size: 12px;
 	}
 	.change-dot {
 		display: inline-block;

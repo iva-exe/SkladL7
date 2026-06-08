@@ -30,10 +30,15 @@
 
 		// Track per-vehicle changes for detailed import log
 		const changeDetails: string[] = [];
+		let missingCount = 0;
+
+		// Format the trailing "· chybí: model, sklad" note for the log line
+		const missingNote = (m: string[]) => (m.length ? ` · chybí: ${m.join(", ")}` : "");
 
 		for (const v of incoming) {
+			if (v.missing.length) missingCount++;
 			if (!map[v.vin]) {
-				// New vehicle
+				// New vehicle — keep missing fields empty (UI renders red "chybí")
 				const nv: Vehicle = {
 					vin: v.vin,
 					model: v.model,
@@ -51,39 +56,36 @@
 				markFieldChanged(nv, "__all__");
 				setVehicleMeta(nv);
 				vehicles.push(nv);
-				changeDetails.push(`[+] ${v.vin} — nové (${v.model})`);
+				changeDetails.push(`[+] ${v.vin} — nové${v.model ? ` (${v.model})` : ""}${missingNote(v.missing)}`);
 				added++;
 			} else if (map[v.vin].status === "vyskladneno") {
-				// Re-stocking
+				// Re-stocking — never overwrite existing data with empty import values
 				const existing = map[v.vin];
 				Object.assign(existing, {
 					status: "naskladneno",
 					dateIn: v.dateIn,
 					dateOut: null,
-					model: v.model,
-					sklad: v.sklad,
-					code: v.code,
+					model: v.model || existing.model,
+					sklad: v.sklad || existing.sklad,
+					code: v.code || existing.code,
 				});
 				markFieldChanged(existing, "__all__");
 				setVehicleMeta(existing);
-				changeDetails.push(`[↻] ${v.vin} — znovu naskladněno`);
+				changeDetails.push(`[↻] ${v.vin} — znovu naskladněno${missingNote(v.missing)}`);
 				restocked++;
 			} else {
-				// Already naskladneno — update changed fields
+				// Already naskladneno — update only fields the import actually provides
+				// (empty import values never overwrite existing data)
 				const existing = map[v.vin];
 				const changed: string[] = [];
 				const parts: string[] = [];
-				if (existing.model !== v.model) { changed.push("model"); parts.push(`model: ${existing.model}→${v.model}`); }
-				if (existing.sklad !== v.sklad) { changed.push("sklad"); parts.push(`sklad: ${existing.sklad}→${v.sklad}`); }
-				if (existing.code !== v.code) { changed.push("code"); parts.push(`kód: ${existing.code || "—"}→${v.code || "—"}`); }
-				if (existing.dateIn !== v.dateIn) { changed.push("dateIn"); parts.push(`datum: ${existing.dateIn}→${v.dateIn}`); }
+				const patch: Partial<Vehicle> = {};
+				if (v.model && existing.model !== v.model) { changed.push("model"); parts.push(`model: ${existing.model || "—"}→${v.model}`); patch.model = v.model; }
+				if (v.code && existing.sklad !== v.sklad) { changed.push("sklad"); parts.push(`sklad: ${existing.sklad || "—"}→${v.sklad}`); patch.sklad = v.sklad; }
+				if (v.code && existing.code !== v.code) { changed.push("code"); parts.push(`kód: ${existing.code || "—"}→${v.code || "—"}`); patch.code = v.code; }
+				if (v.dateIn && existing.dateIn !== v.dateIn) { changed.push("dateIn"); parts.push(`datum: ${existing.dateIn || "—"}→${v.dateIn}`); patch.dateIn = v.dateIn; }
 				if (changed.length) {
-					Object.assign(existing, {
-						model: v.model,
-						sklad: v.sklad,
-						code: v.code,
-						dateIn: v.dateIn,
-					});
+					Object.assign(existing, patch);
 					markFieldChanged(existing, ...changed);
 					setVehicleMeta(existing);
 					changeDetails.push(`[~] ${v.vin} — ${parts.join(", ")}`);
@@ -108,12 +110,17 @@
 		importText = "";
 
 		// Build import summary with per-vehicle detail
-		const summary = `+${added} nových | ${restocked} znovu | -${removed} vyskladněno`;
+		let summary = `+${added} nových | ${restocked} znovu | -${removed} vyskladněno`;
+		if (missingCount) summary += ` | ${missingCount} s chybějícími údaji`;
 		const detail = changeDetails.length
 			? summary + "\n" + changeDetails.join("\n")
 			: summary;
 		pushLog("Import", null, detail);
-		ontoast(`Import dokončen — ${incoming.length} vozidel zpracováno.`);
+		ontoast(
+			missingCount
+				? `Import dokončen — ${incoming.length} vozidel (${missingCount} s chybějícími údaji).`
+				: `Import dokončen — ${incoming.length} vozidel zpracováno.`,
+		);
 	}
 
 	function handleOverlayClick(e: MouseEvent): void {

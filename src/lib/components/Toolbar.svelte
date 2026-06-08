@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { getVehicles } from "$lib/stores/vehicles.svelte";
+	import { getVehicles, getChecked } from "$lib/stores/vehicles.svelte";
 	import { getSettings, updateSettings } from "$lib/stores/settings.svelte";
 
 	const vehicles = $derived(getVehicles());
 	const settings = $derived(getSettings());
+	const checked = $derived(getChecked());
 
 	const models = $derived([...new Set(vehicles.map((v) => v.model))].sort());
 	const statTotal = $derived(vehicles.length);
 	const statIn = $derived(vehicles.filter((v) => v.status === "naskladneno").length);
 	const statOut = $derived(vehicles.filter((v) => v.status === "vyskladneno").length);
+	const statChecked = $derived(checked.size);
 
 	function onFilterStatus(e: Event): void {
 		updateSettings({ filterStatus: (e.target as HTMLSelectElement).value });
@@ -47,6 +49,9 @@
 	<label>Hledat VIN:</label>
 	<input type="text" value={settings.searchVin} oninput={onSearchVin} placeholder="VIN…" style="width: 160px" />
 	<div class="stats">
+		{#if statChecked > 0}
+			<div class="stat-checked">Zvoleno: <span>{statChecked}</span></div>
+		{/if}
 		<div>Celkem: <span>{statTotal}</span></div>
 		<div style="color: var(--green)">Naskladněno: <span>{statIn}</span></div>
 		<div style="color: var(--purple)">Vyskladněno: <span>{statOut}</span></div>
@@ -87,5 +92,15 @@
 	}
 	.stats span {
 		font-weight: 500;
+	}
+	.stat-checked {
+		color: var(--accent);
+		font-weight: 600;
+		padding: 2px 10px;
+		background: var(--accent-bg);
+		border-radius: 100px;
+	}
+	.stat-checked span {
+		font-weight: 700;
 	}
 </style>
