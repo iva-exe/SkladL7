@@ -40,6 +40,8 @@
 		// Track per-vehicle changes for detailed import log
 		const changeDetails: string[] = [];
 		let missingCount = 0;
+		// Only the vehicles actually touched get upserted (avoids full-table push)
+		const touched: Vehicle[] = [];
 
 		// Format the trailing "· chybí: model, sklad" note for the log line
 		const missingNote = (m: string[]) => (m.length ? ` · chybí: ${m.join(", ")}` : "");
@@ -65,6 +67,7 @@
 				markFieldChanged(nv, "__all__");
 				setVehicleMeta(nv);
 				vehicles.push(nv);
+				touched.push(nv);
 				changeDetails.push(`[+] ${v.vin} — nové${v.model ? ` (${v.model})` : ""}${missingNote(v.missing)}`);
 				added++;
 			} else if (map[v.vin].status === "vyskladneno") {
@@ -80,6 +83,7 @@
 				});
 				markFieldChanged(existing, "__all__");
 				setVehicleMeta(existing);
+				touched.push(existing);
 				changeDetails.push(`[↻] ${v.vin} — znovu naskladněno${missingNote(v.missing)}`);
 				restocked++;
 			} else {
@@ -97,6 +101,7 @@
 					Object.assign(existing, patch);
 					markFieldChanged(existing, ...changed);
 					setVehicleMeta(existing);
+					touched.push(existing);
 					changeDetails.push(`[~] ${v.vin} — ${parts.join(", ")}`);
 				}
 			}
@@ -108,13 +113,14 @@
 				v.dateOut = lastWorkday;
 				markFieldChanged(v, "status", "dateOut");
 				setVehicleMeta(v);
+				touched.push(v);
 				changeDetails.push(`[-] ${v.vin} — vyskladněno`);
 				removed++;
 			}
 		}
 
 		setVehicles([...vehicles]);
-		saveData();
+		saveData(touched);
 		open = false;
 		importText = "";
 

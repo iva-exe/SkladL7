@@ -86,15 +86,15 @@ export function isWholeRowChanged(v: Vehicle): boolean {
 /** Clear all change dots that are from a previous day (midnight reset) */
 function clearExpiredChangeDots(): void {
 	const today = todayStr();
-	let changed = false;
+	const cleared: Vehicle[] = [];
 	for (const v of _vehicles) {
 		if (v.changedDate && v.changedDate !== today) {
 			v.changedFields = null;
 			v.changedDate = null;
-			changed = true;
+			cleared.push(v);
 		}
 	}
-	if (changed) saveData();
+	if (cleared.length) saveData(cleared);
 }
 
 /** Schedule midnight reset of change dots */
@@ -258,28 +258,42 @@ export async function pushLog(action: string, vin: string | null, detail: string
 	}
 }
 
-export async function pushToCloud(): Promise<void> {
-	if (!cloudActive()) return;
+/**
+ * Upsert ONLY the given vehicles (chunked). Always prefer this over pushing the
+ * whole table: a full-table push uploads every row on every edit, which both
+ * triggers a realtime storm and, worse, clobbers other users' concurrent edits
+ * with this client's possibly-stale copy of those rows (last-writer-wins across
+ * the entire table). Targeted upserts only ever overwrite the rows you changed.
+ */
+export async function pushVehicles(list: Vehicle[]): Promise<void> {
+	if (!cloudActive() || !list.length) return;
+	const CHUNK = 500;
 	setSyncState("syncing", "Ukládání…");
 	try {
-		const rows = _vehicles.map(toRow);
-		const res = await fetch(getSbUrl() + "/rest/v1/vehicles", {
-			method: "POST",
-			headers: headers(),
-			body: JSON.stringify(rows),
-		});
-		if (!res.ok) {
-			if (res.status === 401 || res.status === 403) {
-				await handleCloudError("push", res.status);
-				return;
+		for (let i = 0; i < list.length; i += CHUNK) {
+			const rows = list.slice(i, i + CHUNK).map(toRow);
+			const res = await fetch(getSbUrl() + "/rest/v1/vehicles", {
+				method: "POST",
+				headers: headers(),
+				body: JSON.stringify(rows),
+			});
+			if (!res.ok) {
+				if (res.status === 401 || res.status === 403) {
+					await handleCloudError("push", res.status);
+					return;
+				}
+				throw new Error("HTTP " + res.status);
 			}
-			throw new Error("HTTP " + res.status);
 		}
 		setSyncState("ok", syncLabel("Synchronizováno"));
 	} catch (err) {
 		console.warn("Push failed:", err);
 		if (cloudActive()) setSyncState("error", "Chyba sync");
 	}
+}
+
+export function pushVehicle(v: Vehicle): Promise<void> {
+	return pushVehicles([v]);
 }
 
 // PostgREST/Supabase caps a single response at 1000 rows by default, so the
@@ -339,14 +353,18 @@ export async function deleteFromCloud(vins: string[]): Promise<void> {
 	}
 }
 
-// ── Save data — local mode: LS only; online mode: cloud only ──
+// ── Save data — local mode: LS only; online mode: targeted cloud upsert ──
 
-export function saveData(): void {
+/**
+ * Persist after a mutation.
+ * - Local mode: write the whole array to localStorage.
+ * - Cloud mode: upsert ONLY the vehicles you changed (pass them in). Pure
+ *   deletions pass nothing — they're handled by deleteFromCloud separately.
+ */
+export function saveData(changed?: Vehicle[]): void {
 	if (cloudActive()) {
-		// Online mode — push to cloud, never touch localStorage
-		pushToCloud();
+		if (changed && changed.length) pushVehicles(changed);
 	} else {
-		// Local mode — save to localStorage only
 		saveLocal();
 	}
 }

@@ -47,7 +47,7 @@
 		else vehicle.dateOut = null;
 		markFieldChanged(vehicle, "status");
 		setVehicleMeta(vehicle);
-		saveData();
+		saveData([vehicle]);
 		onchange();
 		pushLog("Změna stavu", vehicle.vin, `${prev === "naskladneno" ? "Naskladněno" : "Vyskladněno"} → ${val === "naskladneno" ? "Naskladněno" : "Vyskladněno"}`);
 	}
@@ -60,7 +60,7 @@
 		codeValue = "";
 		markFieldChanged(vehicle, "sklad", "code");
 		setVehicleMeta(vehicle);
-		saveData();
+		saveData([vehicle]);
 		onchange();
 		pushLog("Změna skladu", vehicle.vin, `${prev} → ${val}`);
 	}
@@ -93,7 +93,7 @@
 			}
 			markFieldChanged(vehicle, field);
 			setVehicleMeta(vehicle);
-			saveData();
+			saveData([vehicle]);
 			cleanup();
 			onchange();
 			pushLog("Změna data", vehicle.vin, `${field === "dateIn" ? "naskladnění" : "vyskladnění"}: ${prev} → ${vehicle[field] || "—"}`);
@@ -124,7 +124,7 @@
 			}
 			markFieldChanged(vehicle, ...changedList);
 			setVehicleMeta(vehicle);
-			saveData();
+			saveData([vehicle]);
 			pushLog("Změna kódu", vehicle.vin, `${prev || "—"} → ${val || "—"}`);
 		}
 		editingCode = false;

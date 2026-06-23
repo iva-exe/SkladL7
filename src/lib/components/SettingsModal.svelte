@@ -7,7 +7,7 @@
 		clearConnection, suspendCloud,
 		getAuthExpired, setAuthExpired,
 	} from "$lib/stores/settings.svelte";
-	import { pushToCloud, startSync } from "$lib/stores/vehicles.svelte";
+	import { startSync } from "$lib/stores/vehicles.svelte";
 
 	interface Props {
 		open: boolean;
