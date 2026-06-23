@@ -282,22 +282,38 @@ export async function pushToCloud(): Promise<void> {
 	}
 }
 
+// PostgREST/Supabase caps a single response at 1000 rows by default, so the
+// pull MUST paginate — otherwise vehicles beyond row 1000 are silently dropped
+// from local state, which then makes imports misclassify them as "new".
+const PAGE_SIZE = 1000;
+
 export async function pullFromCloud(): Promise<void> {
 	if (!cloudActive()) return;
 	setSyncState("syncing", "Stahování…");
 	try {
-		const res = await fetch(getSbUrl() + "/rest/v1/vehicles?select=*", { headers: headers() });
-		if (!res.ok) {
-			if (res.status === 401 || res.status === 403) {
-				await handleCloudError("pull", res.status);
-				return;
+		const all: VehicleRow[] = [];
+		let offset = 0;
+		for (;;) {
+			const res = await fetch(
+				`${getSbUrl()}/rest/v1/vehicles?select=*&order=vin.asc&limit=${PAGE_SIZE}&offset=${offset}`,
+				{ headers: headers() },
+			);
+			if (!res.ok) {
+				if (res.status === 401 || res.status === 403) {
+					await handleCloudError("pull", res.status);
+					return;
+				}
+				throw new Error("HTTP " + res.status);
 			}
-			throw new Error("HTTP " + res.status);
+			const rows: VehicleRow[] = await res.json();
+			if (!Array.isArray(rows)) throw new Error("Invalid data");
+			all.push(...rows);
+			// A full page means there may be more; a short/empty page is the end.
+			if (rows.length < PAGE_SIZE) break;
+			offset += rows.length;
 		}
-		const rows: VehicleRow[] = await res.json();
-		if (!Array.isArray(rows)) throw new Error("Invalid data");
 		// Online mode: replace vehicles entirely from cloud (no merge with local)
-		_vehicles = rows.map(toLocal);
+		_vehicles = all.map(toLocal);
 		setSyncState("ok", syncLabel("Synchronizováno"));
 	} catch (err) {
 		console.warn("Pull failed:", err);

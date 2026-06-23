@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { parseLines } from "$lib/utils/parser";
 	import { todayStr, lastWorkdayStr } from "$lib/utils/dates";
-	import { getVehicles, setVehicles, setVehicleMeta, saveData, pushLog, markFieldChanged } from "$lib/stores/vehicles.svelte";
+	import { getVehicles, setVehicles, setVehicleMeta, saveData, pushLog, markFieldChanged, pullFromCloud } from "$lib/stores/vehicles.svelte";
 	import type { Vehicle } from "$lib/types";
 
 	interface Props {
@@ -13,13 +13,22 @@
 	let { open = $bindable(), onclose, ontoast }: Props = $props();
 	let importText = $state("");
 
-	function processImport(): void {
+	let importing = $state(false);
+
+	async function processImport(): Promise<void> {
+		if (importing) return;
 		if (!importText.trim()) return;
 		const incoming = parseLines(importText);
 		if (!incoming.length) {
 			ontoast("Nepodařilo se rozpoznat žádná vozidla.");
 			return;
 		}
+
+		// Always classify against the freshest, complete server state — a stale or
+		// partial local cache would misflag existing vehicles as new (and corrupt
+		// their dates/status on re-upsert). pullFromCloud no-ops in local mode.
+		importing = true;
+		await pullFromCloud();
 
 		const vehicles = getVehicles();
 		const inVins = new Set(incoming.map((v) => v.vin));
@@ -121,6 +130,7 @@
 				? `Import dokončen — ${incoming.length} vozidel (${missingCount} s chybějícími údaji).`
 				: `Import dokončen — ${incoming.length} vozidel zpracováno.`,
 		);
+		importing = false;
 	}
 
 	function handleOverlayClick(e: MouseEvent): void {
@@ -141,7 +151,9 @@
 			</div>
 			<div class="modal-footer">
 				<button class="btn" onclick={() => { open = false; importText = ""; }}>Zrušit</button>
-				<button class="btn btn-primary" onclick={processImport}>Importovat</button>
+				<button class="btn btn-primary" onclick={processImport} disabled={importing}>
+					{importing ? "Importuji…" : "Importovat"}
+				</button>
 			</div>
 		</div>
 	</div>
