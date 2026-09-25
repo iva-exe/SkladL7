@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { getVehicles, getChecked } from "$lib/stores/vehicles.svelte";
+	import { getVehicles, getChecked, setChecked } from "$lib/stores/vehicles.svelte";
 	import { getSettings, updateSettings } from "$lib/stores/settings.svelte";
+	import { visibleVehicles } from "$lib/utils/visible";
+
+	const SELECT_TOP_COUNT = 150;
 
 	const vehicles = $derived(getVehicles());
 	const settings = $derived(getSettings());
@@ -23,6 +26,11 @@
 	}
 	function onSearchVin(e: Event): void {
 		updateSettings({ searchVin: (e.target as HTMLInputElement).value.trim().toUpperCase() });
+	}
+	/** Select the first 150 rows as currently shown (filters + sort), replacing any selection. */
+	function selectTop(): void {
+		const top = visibleVehicles(vehicles, settings).slice(0, SELECT_TOP_COUNT);
+		setChecked(new Set(top.map((v) => v.vin)));
 	}
 </script>
 
@@ -48,6 +56,12 @@
 	</select>
 	<label>Hledat VIN:</label>
 	<input type="text" value={settings.searchVin} oninput={onSearchVin} placeholder="VIN…" style="width: 160px" />
+	<button class="btn btn-small" onclick={selectTop} title="Označí prvních {SELECT_TOP_COUNT} řádků seznamu shora">
+		<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>
+		</svg>
+		Označit {SELECT_TOP_COUNT}
+	</button>
 	<div class="stats">
 		{#if statChecked > 0}
 			<div class="stat-checked">Zvoleno: <span>{statChecked}</span></div>

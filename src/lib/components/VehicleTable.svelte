@@ -1,8 +1,7 @@
 <script lang="ts">
-	import type { Vehicle, AppSettings } from "$lib/types";
-	import { parseDateVal, calcDays } from "$lib/utils/dates";
 	import { getVehicles, getChecked, toggleChecked } from "$lib/stores/vehicles.svelte";
 	import { getSettings, updateSettings } from "$lib/stores/settings.svelte";
+	import { visibleVehicles } from "$lib/utils/visible";
 	import VehicleRow from "./VehicleRow.svelte";
 
 	let renderKey = $state(0);
@@ -12,32 +11,7 @@
 	const vehicles = $derived(getVehicles());
 	const checked = $derived(getChecked());
 
-	const filtered = $derived.by(() => {
-		return vehicles.filter((v) => {
-			if (settings.filterStatus !== "all" && v.status !== settings.filterStatus) return false;
-			if (settings.filterModel !== "all" && v.model !== settings.filterModel) return false;
-			if (settings.filterSklad !== "all" && v.sklad !== settings.filterSklad) return false;
-			if (settings.searchVin && !v.vin.toUpperCase().includes(settings.searchVin.toUpperCase())) return false;
-			return true;
-		});
-	});
-
-	const sorted = $derived.by(() => {
-		const col = settings.sortCol;
-		const dir = settings.sortDir === "asc" ? 1 : -1;
-		return [...filtered].sort((a, b) => {
-			let va: any, vb: any;
-			if (col === "dateIn") { va = parseDateVal(a.dateIn); vb = parseDateVal(b.dateIn); }
-			else if (col === "dateOut") { va = parseDateVal(a.dateOut); vb = parseDateVal(b.dateOut); }
-			else if (col === "days") { va = calcDays(a.dateIn, a.dateOut) ?? -1; vb = calcDays(b.dateIn, b.dateOut) ?? -1; }
-			else if (col === "dateAdded") { va = parseDateVal(a.dateAdded); vb = parseDateVal(b.dateAdded); }
-			else if (col === "status") { va = a.status; vb = b.status; }
-			else if (col === "sklad") { va = a.sklad || ""; vb = b.sklad || ""; }
-			else if (col === "model") { va = a.model; vb = b.model; }
-			else { va = a.vin; vb = b.vin; }
-			return va < vb ? -dir : va > vb ? dir : 0;
-		});
-	});
+	const sorted = $derived(visibleVehicles(vehicles, settings));
 
 	function sortBy(col: string): void {
 		if (settings.sortCol === col) {

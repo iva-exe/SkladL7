@@ -4,6 +4,7 @@
 	import { getChecked, getVehicles, setVehicles, clearChecked, deleteFromCloud, pushLog, getSyncStatus, startSync, handleVisibilityChange, handleOnline, handleFocus, saveData, setOnAuthExpired } from "$lib/stores/vehicles.svelte";
 	import { getUserName, getWorkspaceCode, getSyncMode, setSbUrl, setSbKey, setWorkspaceName, clearConnection, setAuthExpired, getSettings } from "$lib/stores/settings.svelte";
 	import { exportToExcel } from "$lib/utils/excel";
+	import { filterVehicles } from "$lib/utils/visible";
 	import VehicleTable from "$lib/components/VehicleTable.svelte";
 	import Toolbar from "$lib/components/Toolbar.svelte";
 	import ImportModal from "$lib/components/ImportModal.svelte";
@@ -31,15 +32,7 @@
 		!!settings.searchVin
 	);
 
-	const filteredVehicles = $derived.by(() => {
-		return vehicles.filter((v) => {
-			if (settings.filterStatus !== "all" && v.status !== settings.filterStatus) return false;
-			if (settings.filterModel !== "all" && v.model !== settings.filterModel) return false;
-			if (settings.filterSklad !== "all" && v.sklad !== settings.filterSklad) return false;
-			if (settings.searchVin && !v.vin.toUpperCase().includes(settings.searchVin.toUpperCase())) return false;
-			return true;
-		});
-	});
+	const filteredVehicles = $derived(filterVehicles(vehicles, settings));
 
 	function showToast(msg: string): void {
 		toastRef?.show(msg);
